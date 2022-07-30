@@ -220,8 +220,12 @@ class TypeCombinator
 
 		// simplify string[] | int[] to (string|int)[]
 		for ($i = 0; $i < $typesCount; $i++) {
+			if (!$types[$i] instanceof IterableType) {
+				continue;
+			}
+
 			for ($j = $i + 1; $j < $typesCount; $j++) {
-				if ($types[$i] instanceof IterableType && $types[$j] instanceof IterableType) {
+				if ($types[$j] instanceof IterableType) {
 					$types[$i] = new IterableType(
 						self::union($types[$i]->getIterableKeyType(), $types[$j]->getIterableKeyType()),
 						self::union($types[$i]->getIterableValueType(), $types[$j]->getIterableValueType()),

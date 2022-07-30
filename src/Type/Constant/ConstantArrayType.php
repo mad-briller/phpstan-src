@@ -36,7 +36,6 @@ use function array_keys;
 use function array_map;
 use function array_merge;
 use function array_pop;
-use function array_push;
 use function array_reverse;
 use function array_slice;
 use function array_unique;
@@ -380,7 +379,7 @@ class ConstantArrayType extends ArrayType implements ConstantType
 				continue;
 			}
 
-			array_push($acceptors, ...$method->getVariants());
+			$acceptors = array_merge($acceptors, $method->getVariants());
 		}
 
 		return $acceptors;
