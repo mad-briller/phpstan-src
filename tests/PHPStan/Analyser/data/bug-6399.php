@@ -15,7 +15,7 @@ class AsyncTask{
 		if(self::$threadLocalStorage !== null){
 			assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 			if (isset(self::$threadLocalStorage[$h = spl_object_id($this)])) {
-				assertType('ArrayObject<int, array<string, mixed>>&hasOffset(int)', self::$threadLocalStorage);
+				assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 				unset(self::$threadLocalStorage[$h]);
 				assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 				if(self::$threadLocalStorage->count() === 0){
@@ -33,16 +33,16 @@ class AsyncTask{
 
 		assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 		if (isset(self::$threadLocalStorage[1])) {
-			assertType('ArrayObject<int, array<string, mixed>>&hasOffset(1)', self::$threadLocalStorage);
+			assertType('ArrayObject<int, array<string, mixed>>&hasOffsetValue(1, array<string, mixed>)', self::$threadLocalStorage);
 		} else {
 			assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 		}
 
 		assertType('ArrayObject<int, array<string, mixed>>', self::$threadLocalStorage);
 		if (isset(self::$threadLocalStorage[1]) && isset(self::$threadLocalStorage[2])) {
-			assertType('ArrayObject<int, array<string, mixed>>&hasOffset(1)&hasOffset(2)', self::$threadLocalStorage);
+			assertType('ArrayObject<int, array<string, mixed>>&hasOffsetValue(1, array<string, mixed>)&hasOffsetValue(2, array<string, mixed>)', self::$threadLocalStorage);
 			unset(self::$threadLocalStorage[2]);
-			assertType('ArrayObject<int, array<string, mixed>>&hasOffset(1)', self::$threadLocalStorage);
+			assertType('ArrayObject<int, array<string, mixed>>&hasOffsetValue(1, array<string, mixed>)', self::$threadLocalStorage);
 		}
 	}
 

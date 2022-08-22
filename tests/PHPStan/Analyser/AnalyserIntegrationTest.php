@@ -626,12 +626,6 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 		$this->assertNoErrors($errors);
 	}
 
-	public function testBug5081(): void
-	{
-		$errors = $this->runAnalyse(__DIR__ . '/data/bug-5081.php');
-		$this->assertNoErrors($errors);
-	}
-
 	public function testBug1388(): void
 	{
 		$errors = $this->runAnalyse(__DIR__ . '/data/bug-1388.php');
@@ -793,7 +787,7 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 	public function testBug7094(): void
 	{
 		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7094.php');
-		$this->assertCount(7, $errors);
+		$this->assertCount(6, $errors);
 
 		$this->assertSame('Parameter #2 $val of method Bug7094\Foo::setAttribute() contains unresolvable type.', $errors[0]->getMessage());
 		$this->assertSame(74, $errors[0]->getLine());
@@ -808,8 +802,6 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 
 		$this->assertSame('Parameter #1 $attr of method Bug7094\Foo::setAttributes() expects array{foo?: string, bar?: 5|6|7, baz?: bool}, non-empty-array<string, 5|6|7|bool|string> given.', $errors[5]->getMessage());
 		$this->assertSame(29, $errors[5]->getLine());
-		$this->assertSame('Parameter #1 $attr of method Bug7094\Foo::setAttributes() expects array{foo?: string, bar?: 5|6|7, baz?: bool}, array<\'bar\'|\'baz\'|\'foo\', 5|6|7|bool|string> given.', $errors[6]->getMessage());
-		$this->assertSame(49, $errors[6]->getLine());
 	}
 
 	public function testOffsetAccess(): void
@@ -865,9 +857,7 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 	public function testBug7500(): void
 	{
 		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7500.php');
-		$this->assertCount(1, $errors);
-		$this->assertSame('Method Bug7500\HelloWorld::computeForFrontByPosition() should return array<T of Bug7500\PositionEntityInterface&Bug7500\TgEntityInterface> but returns array<Bug7500\PositionEntityInterface&Bug7500\TgEntityInterface>.', $errors[0]->getMessage());
-		$this->assertSame(38, $errors[0]->getLine());
+		$this->assertNoErrors($errors);
 	}
 
 	public function testBug7554(): void

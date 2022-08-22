@@ -51,7 +51,7 @@ class FunctionSignatureMapProvider implements SignatureMapProvider
 		return $this->getFunctionSignatures(sprintf('%s::%s', $className, $methodName), $className, $reflectionMethod);
 	}
 
-	public function getFunctionSignatures(string $functionName, ?string $className, ReflectionFunctionAbstract|null $reflectionFunction): array
+	public function getFunctionSignatures(string $functionName, ?string $className, ?ReflectionFunctionAbstract $reflectionFunction): array
 	{
 		$functionName = strtolower($functionName);
 
@@ -67,7 +67,7 @@ class FunctionSignatureMapProvider implements SignatureMapProvider
 		return $signatures;
 	}
 
-	private function createSignature(string $functionName, ?string $className, ReflectionFunctionAbstract|null $reflectionFunction): FunctionSignature
+	private function createSignature(string $functionName, ?string $className, ?ReflectionFunctionAbstract $reflectionFunction): FunctionSignature
 	{
 		if (!$reflectionFunction instanceof ReflectionMethod && !$reflectionFunction instanceof ReflectionFunction && $reflectionFunction !== null) {
 			throw new ShouldNotHappenException();
@@ -193,6 +193,24 @@ class FunctionSignatureMapProvider implements SignatureMapProvider
 				}
 
 				$signatureMap = $this->computeSignatureMap($signatureMap, $php80MapDelta);
+			}
+
+			if ($this->phpVersion->getVersionId() >= 80100) {
+				$php81MapDelta = require __DIR__ . '/../../../resources/functionMap_php81delta.php';
+				if (!is_array($php81MapDelta)) {
+					throw new ShouldNotHappenException('Signature map could not be loaded.');
+				}
+
+				$signatureMap = $this->computeSignatureMap($signatureMap, $php81MapDelta);
+			}
+
+			if ($this->phpVersion->getVersionId() >= 80200) {
+				$php82MapDelta = require __DIR__ . '/../../../resources/functionMap_php82delta.php';
+				if (!is_array($php82MapDelta)) {
+					throw new ShouldNotHappenException('Signature map could not be loaded.');
+				}
+
+				$signatureMap = $this->computeSignatureMap($signatureMap, $php82MapDelta);
 			}
 
 			$this->signatureMap = $signatureMap;

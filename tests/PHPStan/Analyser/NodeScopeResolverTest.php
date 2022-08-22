@@ -935,6 +935,33 @@ class NodeScopeResolverTest extends TypeInferenceTestCase
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/this-subtractable.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/match-expression-inference.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-1519.php');
+
+		if (PHP_VERSION_ID < 80000) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7663-php7.php');
+		}
+		if (PHP_VERSION_ID >= 80000) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7663-php8.php');
+		}
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7663.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7688.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7689.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/has-offset-type-bug.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-5920.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7621-1.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7621-2.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7621-3.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Methods/data/bug-7511.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7224.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-6556.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Comparison/data/bug-4708.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-4708.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-2911.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Functions/data/bug-7156.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-6728.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-6364.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-5758.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Functions/data/bug-3931.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-5223.php');
 	}
 
 	/**

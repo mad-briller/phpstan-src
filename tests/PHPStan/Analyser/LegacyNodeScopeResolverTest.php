@@ -1149,7 +1149,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$intArrayForRewritingFirstElement[1]',
 			],
 			[
-				'stdClass',
+				'ArrayAccess&stdClass&hasOffsetValue(0, \'error\')',
 				'$obj',
 			],
 			[
@@ -4739,7 +4739,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'array_pop($stringKeys)',
 			],
 			[
-				'array<stdClass>&hasOffset(\'baz\')',
+				'array<stdClass>&hasOffsetValue(\'baz\', stdClass)',
 				'$stdClassesWithIsset',
 			],
 			[
@@ -5138,6 +5138,14 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 
 	public function dataFunctions(): array
 	{
+		$strSplitDefaultReturnType = 'non-empty-array<int, string>|false';
+		if (PHP_VERSION_ID >= 80000) {
+			$strSplitDefaultReturnType = 'non-empty-array<int, string>';
+		}
+		if (PHP_VERSION_ID >= 80200) {
+			$strSplitDefaultReturnType = 'array<int, string>';
+		}
+
 		return [
 			[
 				'string',
@@ -5328,7 +5336,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$gettimeofdayBenevolent',
 			],
 			[
-				PHP_VERSION_ID < 80000 ? 'non-empty-array<int, string>|false' : 'non-empty-array<int, string>',
+				$strSplitDefaultReturnType,
 				'$strSplitConstantStringWithoutDefinedParameters',
 			],
 			[
@@ -5336,7 +5344,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$strSplitConstantStringWithoutDefinedSplitLength',
 			],
 			[
-				'non-empty-array<int, string>',
+				PHP_VERSION_ID < 80200 ? 'non-empty-array<int, string>' : 'array<int, string>',
 				'$strSplitStringWithoutDefinedSplitLength',
 			],
 			[
@@ -5352,7 +5360,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$strSplitConstantStringWithFailureSplitLength',
 			],
 			[
-				PHP_VERSION_ID < 80000 ? 'non-empty-array<int, string>|false' : 'non-empty-array<int, string>',
+				$strSplitDefaultReturnType,
 				'$strSplitConstantStringWithInvalidSplitLengthType',
 			],
 			[
@@ -5360,7 +5368,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$strSplitConstantStringWithVariableStringAndConstantSplitLength',
 			],
 			[
-				PHP_VERSION_ID < 80000 ? 'non-empty-array<int, string>|false' : 'non-empty-array<int, string>',
+				$strSplitDefaultReturnType,
 				'$strSplitConstantStringWithVariableStringAndVariableSplitLength',
 			],
 			// parse_url
@@ -7932,11 +7940,11 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$array',
 			],
 			[
-				'array',
+				'array&hasOffsetValue(\'key\', mixed~null)',
 				'$generalArray',
 			],
 			[
-				'mixed', // should be DateTimeImmutable
+				'mixed',
 				'$generalArray[\'key\']',
 			],
 			[
@@ -8326,7 +8334,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$anotherArrayCopy',
 			],
 			[
-				"array<'a'|'b'|'c', 1|2|3|4|null>",
+				'array{a: 1|2|3, b?: 2|3|null, c?: 4}',
 				'$yetAnotherArrayCopy',
 			],
 			[
@@ -8338,7 +8346,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$mixedArrayKeyExists',
 			],
 			[
-				'array<int>&hasOffset(\'a\')',
+				'array<int>&hasOffsetValue(\'a\', int)',
 				'$integers',
 			],
 			[

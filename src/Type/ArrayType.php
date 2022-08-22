@@ -8,8 +8,10 @@ use PHPStan\Reflection\TrivialParametersAcceptor;
 use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Accessory\HasOffsetType;
+use PHPStan\Type\Accessory\HasOffsetValueType;
 use PHPStan\Type\Accessory\NonEmptyArrayType;
 use PHPStan\Type\Constant\ConstantArrayType;
+use PHPStan\Type\Constant\ConstantArrayTypeBuilder;
 use PHPStan\Type\Constant\ConstantFloatType;
 use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
@@ -261,6 +263,15 @@ class ArrayType implements Type
 			$offsetType = new IntegerType();
 		}
 
+		if (
+			($offsetType instanceof ConstantStringType || $offsetType instanceof ConstantIntegerType)
+			&& $offsetType->isSuperTypeOf($this->keyType)->yes()
+		) {
+			$builder = ConstantArrayTypeBuilder::createEmpty();
+			$builder->setOffsetValueType($offsetType, $valueType);
+			return $builder->getArray();
+		}
+
 		return TypeCombinator::intersect(new self(
 			TypeCombinator::union($this->keyType, self::castToArrayKeyType($offsetType)),
 			$unionValues ? TypeCombinator::union($this->itemType, $valueType) : $valueType,
@@ -436,6 +447,10 @@ class ArrayType implements Type
 		}
 
 		if ($this instanceof ConstantArrayType && $typeToRemove instanceof HasOffsetType) {
+			return $this->unsetOffset($typeToRemove->getOffsetType());
+		}
+
+		if ($this instanceof ConstantArrayType && $typeToRemove instanceof HasOffsetValueType) {
 			return $this->unsetOffset($typeToRemove->getOffsetType());
 		}
 
