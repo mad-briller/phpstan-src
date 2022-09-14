@@ -2,6 +2,7 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
 use PHPStan\Type\Accessory\AccessoryType;
 use PHPStan\Type\Accessory\HasOffsetType;
 use PHPStan\Type\Accessory\HasOffsetValueType;
@@ -15,10 +16,10 @@ use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\Generic\TemplateBenevolentUnionType;
 use PHPStan\Type\Generic\TemplateType;
 use PHPStan\Type\Generic\TemplateTypeFactory;
-use PHPStan\Type\Generic\TemplateTypeHelper;
 use PHPStan\Type\Generic\TemplateUnionType;
 use function array_intersect_key;
 use function array_key_exists;
+use function array_keys;
 use function array_map;
 use function array_merge;
 use function array_slice;
@@ -28,6 +29,7 @@ use function count;
 use function get_class;
 use function is_int;
 use function md5;
+use function sprintf;
 use function usort;
 
 /** @api */
@@ -170,7 +172,12 @@ class TypeCombinator
 						continue;
 					}
 					if ($innerType instanceof AccessoryType || $innerType instanceof CallableType) {
-						$intermediateAccessoryTypes[$innerType->describe(VerbosityLevel::cache())] = $innerType;
+						if ($innerType instanceof HasOffsetValueType) {
+							$intermediateAccessoryTypes[sprintf('hasOffsetValue(%s)', $innerType->getOffsetType()->describe(VerbosityLevel::cache()))][] = $innerType;
+							continue;
+						}
+
+						$intermediateAccessoryTypes[$innerType->describe(VerbosityLevel::cache())][] = $innerType;
 						continue;
 					}
 				}
@@ -190,7 +197,7 @@ class TypeCombinator
 
 			if ($types[$i]->isIterableAtLeastOnce()->yes()) {
 				$nonEmpty = new NonEmptyArrayType();
-				$arrayAccessoryTypes[] = [$nonEmpty->describe(VerbosityLevel::cache()) => $nonEmpty];
+				$arrayAccessoryTypes[] = [$nonEmpty->describe(VerbosityLevel::cache()) => [$nonEmpty]];
 			} else {
 				$arrayAccessoryTypes[] = [];
 			}
@@ -204,11 +211,22 @@ class TypeCombinator
 		/** @var ArrayType[] $arrayTypes */
 		$arrayTypes = $arrayTypes;
 
-		$arrayAccessoryTypesToProcess = [];
+		$commonArrayAccessoryTypesKeys = [];
 		if (count($arrayAccessoryTypes) > 1) {
-			$arrayAccessoryTypesToProcess = array_values(array_intersect_key(...$arrayAccessoryTypes));
+			$commonArrayAccessoryTypesKeys = array_keys(array_intersect_key(...$arrayAccessoryTypes));
 		} elseif (count($arrayAccessoryTypes) > 0) {
-			$arrayAccessoryTypesToProcess = array_values($arrayAccessoryTypes[0]);
+			$commonArrayAccessoryTypesKeys = array_keys($arrayAccessoryTypes[0]);
+		}
+
+		$arrayAccessoryTypesToProcess = [];
+		foreach ($commonArrayAccessoryTypesKeys as $commonKey) {
+			$typesToUnion = [];
+			foreach ($arrayAccessoryTypes as $array) {
+				foreach ($array[$commonKey] as $arrayAccessoryType) {
+					$typesToUnion[] = $arrayAccessoryType;
+				}
+			}
+			$arrayAccessoryTypesToProcess[] = self::union(...$typesToUnion);
 		}
 
 		$types = array_values(
@@ -369,6 +387,11 @@ class TypeCombinator
 		if ($a instanceof IntegerRangeType && $b instanceof IntegerRangeType) {
 			return null;
 		}
+		if ($a instanceof HasOffsetValueType && $b instanceof HasOffsetValueType) {
+			if ($a->getOffsetType()->equals($b->getOffsetType())) {
+				return [new HasOffsetValueType($a->getOffsetType(), self::union($a->getValueType(), $b->getValueType())), null];
+			}
+		}
 
 		if ($a instanceof SubtractableType) {
 			$typeWithoutSubtractedTypeA = $a->getTypeWithoutSubtractedType();
@@ -407,7 +430,8 @@ class TypeCombinator
 		if (
 			$a instanceof ConstantStringType
 			&& $a->getValue() === ''
-			&& $b->describe(VerbosityLevel::value()) === 'non-empty-string'
+			&& ($b->describe(VerbosityLevel::value()) === 'non-empty-string'
+			|| $b->describe(VerbosityLevel::value()) === 'non-falsy-string')
 		) {
 			return [null, new StringType()];
 		}
@@ -415,9 +439,32 @@ class TypeCombinator
 		if (
 			$b instanceof ConstantStringType
 			&& $b->getValue() === ''
-			&& $a->describe(VerbosityLevel::value()) === 'non-empty-string'
+			&& ($a->describe(VerbosityLevel::value()) === 'non-empty-string'
+				|| $a->describe(VerbosityLevel::value()) === 'non-falsy-string')
 		) {
 			return [new StringType(), null];
+		}
+
+		if (
+			$a instanceof ConstantStringType
+			&& $a->getValue() === '0'
+			&& $b->describe(VerbosityLevel::value()) === 'non-falsy-string'
+		) {
+			return [null, new IntersectionType([
+				new StringType(),
+				new AccessoryNonEmptyStringType(),
+			])];
+		}
+
+		if (
+			$b instanceof ConstantStringType
+			&& $b->getValue() === '0'
+			&& $a->describe(VerbosityLevel::value()) === 'non-falsy-string'
+		) {
+			return [new IntersectionType([
+				new StringType(),
+				new AccessoryNonEmptyStringType(),
+			]), null];
 		}
 
 		return null;
@@ -547,7 +594,7 @@ class TypeCombinator
 		}
 		if (count($arrayTypes) === 1) {
 			return [
-				self::intersect($arrayTypes[0], ...$accessoryTypes),
+				self::intersect(...self::optimizeConstantArrays($arrayTypes), ...$accessoryTypes),
 			];
 		}
 
@@ -589,15 +636,65 @@ class TypeCombinator
 			return [
 				self::intersect(new ArrayType(
 					self::union(...$keyTypesForGeneralArray),
-					self::union(...$valueTypesForGeneralArray),
+					self::union(...self::optimizeConstantArrays($valueTypesForGeneralArray)),
 				), ...$accessoryTypes),
 			];
 		}
 
+		$reducedArrayTypes = self::reduceArrays($arrayTypes);
+
 		return array_map(
 			static fn (Type $arrayType) => self::intersect($arrayType, ...$accessoryTypes),
-			self::reduceArrays($arrayTypes),
+			self::optimizeConstantArrays($reducedArrayTypes),
 		);
+	}
+
+	/**
+	 * @param Type[] $types
+	 * @return Type[]
+	 */
+	private static function optimizeConstantArrays(array $types): array
+	{
+		$constantArrayValuesCount = self::countConstantArrayValueTypes($types);
+
+		if ($constantArrayValuesCount > ConstantArrayTypeBuilder::ARRAY_COUNT_LIMIT) {
+			$results = [];
+			foreach ($types as $type) {
+				$results[] = TypeTraverser::map($type, static function (Type $type, callable $traverse): Type {
+					if ($type instanceof ConstantArrayType) {
+						return $type->generalize(GeneralizePrecision::moreSpecific());
+					}
+
+					return $traverse($type);
+				});
+			}
+
+			return $results;
+		}
+
+		return $types;
+	}
+
+	/**
+	 * @param Type[] $types
+	 */
+	private static function countConstantArrayValueTypes(array $types): int
+	{
+		$constantArrayValuesCount = 0;
+		foreach ($types as $type) {
+			if ($type instanceof ConstantArrayType) {
+				$constantArrayValuesCount += count($type->getValueTypes());
+			}
+
+			TypeTraverser::map($type, static function (Type $type, callable $traverse) use (&$constantArrayValuesCount): Type {
+				if ($type instanceof ConstantArrayType) {
+					$constantArrayValuesCount += count($type->getValueTypes());
+				}
+
+				return $traverse($type);
+			});
+		}
+		return $constantArrayValuesCount;
 	}
 
 	/**
@@ -697,10 +794,8 @@ class TypeCombinator
 					$type->getName(),
 					$union,
 					$type->getVariance(),
+					$type->getStrategy(),
 				);
-				if ($type->isArgument()) {
-					return TemplateTypeHelper::toArgument($union);
-				}
 			}
 
 			return $union;
@@ -823,14 +918,27 @@ class TypeCombinator
 					}
 
 					if ($types[$i] instanceof ConstantArrayType && $types[$j] instanceof HasOffsetValueType) {
-						$types[$i] = $types[$i]->setOffsetValueType($types[$j]->getOffsetType(), $types[$j]->getValueType());
+						$offsetType = $types[$j]->getOffsetType();
+						$valueType = $types[$j]->getValueType();
+						$newValueType = self::intersect($types[$i]->getOffsetValueType($offsetType), $valueType);
+						if ($newValueType instanceof NeverType) {
+							return new NeverType();
+						}
+						$types[$i] = $types[$i]->setOffsetValueType($offsetType, $newValueType);
 						array_splice($types, $j--, 1);
 						$typesCount--;
 						continue;
 					}
 
 					if ($types[$j] instanceof ConstantArrayType && $types[$i] instanceof HasOffsetValueType) {
-						$types[$j] = $types[$j]->setOffsetValueType($types[$i]->getOffsetType(), $types[$i]->getValueType());
+						$offsetType = $types[$i]->getOffsetType();
+						$valueType = $types[$i]->getValueType();
+						$newValueType = self::intersect($types[$j]->getOffsetValueType($offsetType), $valueType);
+						if ($newValueType instanceof NeverType) {
+							return new NeverType();
+						}
+
+						$types[$j] = $types[$j]->setOffsetValueType($offsetType, $newValueType);
 						array_splice($types, $i--, 1);
 						$typesCount--;
 						continue 2;

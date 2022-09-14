@@ -57,6 +57,7 @@ parameters:
 	checkAlwaysTrueLooseComparison: false
 	checkClassCaseSensitivity: false
 	checkExplicitMixed: false
+	checkImplicitMixed: false
 	checkFunctionArgumentTypes: false
 	checkFunctionNameCase: false
 	checkGenericClassInNonGenericObjectType: false
@@ -262,6 +263,7 @@ parametersSchema:
 	checkAlwaysTrueLooseComparison: bool()
 	checkClassCaseSensitivity: bool()
 	checkExplicitMixed: bool()
+	checkImplicitMixed: bool()
 	checkFunctionArgumentTypes: bool()
 	checkFunctionNameCase: bool()
 	checkGenericClassInNonGenericObjectType: bool()
@@ -414,6 +416,16 @@ services:
 
 	-
 		class: PHPStan\Parser\ArrayWalkArgVisitor
+		tags:
+			- phpstan.parser.richParserNodeVisitor
+
+	-
+		class: PHPStan\Parser\ClosureArgVisitor
+		tags:
+			- phpstan.parser.richParserNodeVisitor
+
+	-
+		class: PHPStan\Parser\ArrowFunctionArgVisitor
 		tags:
 			- phpstan.parser.richParserNodeVisitor
 
@@ -1005,6 +1017,7 @@ services:
 			checkThisOnly: %checkThisOnly%
 			checkUnionTypes: %checkUnionTypes%
 			checkExplicitMixed: %checkExplicitMixed%
+			checkImplicitMixed: %checkImplicitMixed%
 
 	-
 		class: PHPStan\Rules\UnusedFunctionParametersCheck
@@ -1029,6 +1042,11 @@ services:
 
 	-
 		class: PHPStan\Type\Php\ArgumentBasedFunctionReturnTypeExtension
+		tags:
+			- phpstan.broker.dynamicFunctionReturnTypeExtension
+
+	-
+		class: PHPStan\Type\Php\ArrayIntersectKeyFunctionReturnTypeExtension
 		tags:
 			- phpstan.broker.dynamicFunctionReturnTypeExtension
 
@@ -1419,6 +1437,11 @@ services:
 			- phpstan.broker.dynamicFunctionReturnTypeExtension
 
 	-
+		class: PHPStan\Type\Php\LtrimFunctionReturnTypeExtension
+		tags:
+			- phpstan.broker.dynamicFunctionReturnTypeExtension
+
+	-
 		class: PHPStan\Type\Php\MbFunctionsReturnTypeExtension
 		tags:
 			- phpstan.broker.dynamicFunctionReturnTypeExtension
@@ -1645,6 +1668,11 @@ services:
 
 	-
 		class: PHPStan\Type\Php\ArrayIsListFunctionTypeSpecifyingExtension
+		tags:
+			- phpstan.typeSpecifier.functionTypeSpecifyingExtension
+
+	-
+		class: PHPStan\Type\Php\CtypeDigitFunctionTypeSpecifyingExtension
 		tags:
 			- phpstan.typeSpecifier.functionTypeSpecifyingExtension
 

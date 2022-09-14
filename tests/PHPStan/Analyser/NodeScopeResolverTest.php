@@ -291,6 +291,7 @@ class NodeScopeResolverTest extends TypeInferenceTestCase
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-map.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-map-closure.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-merge.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-merge2.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-sum.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-plus.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-4573.php');
@@ -879,6 +880,7 @@ class NodeScopeResolverTest extends TypeInferenceTestCase
 		if (PHP_VERSION_ID >= 80100) {
 			yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7167.php');
 			yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-6864.php');
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7776.php');
 		}
 
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7068.php');
@@ -962,6 +964,72 @@ class NodeScopeResolverTest extends TypeInferenceTestCase
 		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-5758.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Functions/data/bug-3931.php');
 		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-5223.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7698.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/non-falsy-string.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7483.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7056.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Variables/data/bug-7417.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-7469.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Variables/data/bug-3391.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-6901.php');
+
+		if (PHP_VERSION_ID >= 70400) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/arrow-function-argument-type.php');
+		}
+
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/closure-argument-type.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/ctype-digit.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7788.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7809.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/composer-non-empty-array-after-unset.php');
+
+		if (PHP_VERSION_ID >= 80200) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Methods/data/true-typehint.php');
+		}
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-6000.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/prestashop-breakdowns-empty-array.php');
+
+		if (PHP_VERSION_ID < 80000) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/loose-comparisons-php7.php');
+		}
+		if (PHP_VERSION_ID >= 80000) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/loose-comparisons-php8.php');
+		}
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/loose-comparisons.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7563.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7764.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-5845.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-flip-constant.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-filter-constant.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-intersect-key-constant.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/composer-array-bug.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/tagged-unions.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7492.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7877.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-1021.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/slevomat-foreach-unset-bug.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-6170.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/slevomat-foreach-array-key-exists-bug.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/array-key-exists.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7909.php');
+
+		if (PHP_VERSION_ID >= 80000) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Comparison/data/bug-7898.php');
+		}
+
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7921.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7928.php');
+
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7949.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7639.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-5304.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7244.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7501.php');
+		if (PHP_VERSION_ID >= 80200) {
+			yield from $this->gatherAssertTypes(__DIR__ . '/data/standalone-types.php');
+		}
+		yield from $this->gatherAssertTypes(__DIR__ . '/../Rules/Arrays/data/bug-7954.php');
+		yield from $this->gatherAssertTypes(__DIR__ . '/data/bug-7993.php');
 	}
 
 	/**

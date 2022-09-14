@@ -13,11 +13,11 @@ use PHPStan\Testing\RuleTestCase;
 class ReturnTypeRuleTest extends RuleTestCase
 {
 
-	private bool $checkExplicitMixed;
+	private bool $checkExplicitMixed = false;
 
 	protected function getRule(): Rule
 	{
-		return new ReturnTypeRule(new FunctionReturnTypeCheck(new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed)));
+		return new ReturnTypeRule(new FunctionReturnTypeCheck(new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed, false)));
 	}
 
 	public function testReturnTypeRule(): void
@@ -132,6 +132,21 @@ class ReturnTypeRuleTest extends RuleTestCase
 	{
 		$this->checkExplicitMixed = true;
 		$this->analyse([__DIR__ . '/data/bug-3931.php'], []);
+	}
+
+	public function testBug3801(): void
+	{
+		$this->checkExplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-3801.php'], [
+			[
+				'Function Bug3801\do_foo() should return array{bool, null}|array{null, bool} but returns array{false, true}.',
+				17,
+			],
+			[
+				'Function Bug3801\do_foo() should return array{bool, null}|array{null, bool} but returns array{false, false}.',
+				21,
+			],
+		]);
 	}
 
 }

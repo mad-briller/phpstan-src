@@ -626,6 +626,12 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 		$this->assertNoErrors($errors);
 	}
 
+	public function testBug5081(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-5081.php');
+		$this->assertNoErrors($errors);
+	}
+
 	public function testBug1388(): void
 	{
 		$errors = $this->runAnalyse(__DIR__ . '/data/bug-1388.php');
@@ -760,9 +766,9 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 
 		$errors = $this->runAnalyse(__DIR__ . '/data/discussion-7124.php');
 		$this->assertCount(4, $errors);
-		$this->assertSame('Parameter #2 $callback of function Discussion7124\filter expects callable(bool, int): bool, Closure(int, bool): bool given.', $errors[0]->getMessage());
+		$this->assertSame('Parameter #2 $callback of function Discussion7124\filter expects callable(bool, int=): bool, Closure(int, bool): bool given.', $errors[0]->getMessage());
 		$this->assertSame(38, $errors[0]->getLine());
-		$this->assertSame('Parameter #2 $callback of function Discussion7124\filter expects callable(bool, int): bool, Closure(int): bool given.', $errors[1]->getMessage());
+		$this->assertSame('Parameter #2 $callback of function Discussion7124\filter expects callable(bool, int=): bool, Closure(int): bool given.', $errors[1]->getMessage());
 		$this->assertSame(45, $errors[1]->getLine());
 		$this->assertSame('Parameter #2 $callback of function Discussion7124\filter expects callable(int): bool, Closure(bool): bool given.', $errors[2]->getMessage());
 		$this->assertSame(52, $errors[2]->getLine());
@@ -800,7 +806,7 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 		$this->assertSame('Return type of call to method Bug7094\Foo::getAttribute() contains unresolvable type.', $errors[4]->getMessage());
 		$this->assertSame(79, $errors[4]->getLine());
 
-		$this->assertSame('Parameter #1 $attr of method Bug7094\Foo::setAttributes() expects array{foo?: string, bar?: 5|6|7, baz?: bool}, non-empty-array<string, 5|6|7|bool|string> given.', $errors[5]->getMessage());
+		$this->assertSame('Parameter #1 $attr of method Bug7094\Foo::setAttributes() expects array{foo?: string, bar?: 5|6|7, baz?: bool}, non-empty-array<K of string, 5|6|7|bool|string> given.', $errors[5]->getMessage());
 		$this->assertSame(29, $errors[5]->getLine());
 	}
 
@@ -872,7 +878,7 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 		$this->assertSame(27, $errors[1]->getLine());
 	}
 
-	public function testBug7737(): void
+	public function testBug7637(): void
 	{
 		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7637.php');
 		$this->assertCount(2, $errors);
@@ -882,6 +888,68 @@ class AnalyserIntegrationTest extends PHPStanTestCase
 
 		$this->assertSame('Method Bug7637\HelloWorld::getProperty() has invalid return type Bug7637\rex_timer.', $errors[1]->getMessage());
 		$this->assertSame(54, $errors[1]->getLine());
+	}
+
+	public function testBug7737(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7737.php');
+		$this->assertNoErrors($errors);
+	}
+
+	public function testBug7762(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7762.php');
+		$this->assertCount(2, $errors);
+		$this->assertSame('Function json_decode invoked with 0 parameters, 1-4 required.', $errors[0]->getMessage());
+		$this->assertSame('Function json_encode invoked with 0 parameters, 1-3 required.', $errors[1]->getMessage());
+	}
+
+	public function testPrestashopInfiniteRunXmlLoaderBug(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/prestashop-xml-loader.php');
+		$this->assertCount(4, $errors);
+		$this->assertSame('Property PrestaShopBundleInfiniteRunBug\XmlLoader::$data_path has no type specified.', $errors[0]->getMessage());
+		$this->assertSame('Method PrestaShopBundleInfiniteRunBug\XmlLoader::getEntityInfo() has no return type specified.', $errors[1]->getMessage());
+		$this->assertSame('Method PrestaShopBundleInfiniteRunBug\XmlLoader::getEntityInfo() has parameter $entity with no type specified.', $errors[2]->getMessage());
+		$this->assertSame('Method PrestaShopBundleInfiniteRunBug\XmlLoader::getEntityInfo() has parameter $exists with no type specified.', $errors[3]->getMessage());
+	}
+
+	public function testBug7320(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7320.php');
+		$this->assertCount(1, $errors);
+		$this->assertSame('Parameter #1 $c of function Bug7320\foo expects callable(int=): void, Closure(int): void given.', $errors[0]->getMessage());
+		$this->assertSame(13, $errors[0]->getLine());
+	}
+
+	public function testBug7581(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7581.php');
+		$this->assertNoErrors($errors);
+	}
+
+	public function testBug7903(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7903.php');
+		$this->assertNoErrors($errors);
+	}
+
+	public function testBug7901(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7901.php');
+		$this->assertNoErrors($errors);
+	}
+
+	public function testBug7918(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7918.php');
+		$this->assertNoErrors($errors);
+	}
+
+	public function testBug7140(): void
+	{
+		$errors = $this->runAnalyse(__DIR__ . '/data/bug-7140.php');
+		$this->assertNoErrors($errors);
 	}
 
 	/**

@@ -146,7 +146,12 @@ class CallableType implements CompoundType, ParametersAcceptor
 			fn (): string => sprintf(
 				'callable(%s): %s',
 				implode(', ', array_map(
-					static fn (ParameterReflection $param): string => sprintf('%s%s', $param->isVariadic() ? '...' : '', $param->getType()->describe($level)),
+					static fn (ParameterReflection $param): string => sprintf(
+						'%s%s%s',
+						$param->isVariadic() ? '...' : '',
+						$param->getType()->describe($level),
+						$param->isOptional() && !$param->isVariadic() ? '=' : '',
+					),
 					$this->getParameters(),
 				)),
 				$this->returnType->describe($level),
@@ -321,6 +326,11 @@ class CallableType implements CompoundType, ParametersAcceptor
 	}
 
 	public function isNonEmptyString(): TrinaryLogic
+	{
+		return TrinaryLogic::createMaybe();
+	}
+
+	public function isNonFalsyString(): TrinaryLogic
 	{
 		return TrinaryLogic::createMaybe();
 	}

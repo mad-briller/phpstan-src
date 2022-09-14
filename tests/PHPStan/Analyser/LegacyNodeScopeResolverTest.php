@@ -1149,7 +1149,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$intArrayForRewritingFirstElement[1]',
 			],
 			[
-				'ArrayAccess&stdClass&hasOffsetValue(0, \'error\')',
+				'ArrayAccess&stdClass',
 				'$obj',
 			],
 			[
@@ -2256,15 +2256,15 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'false ? 1 : 2',
 			],
 			[
-				'12|non-empty-string',
+				'12|non-falsy-string',
 				'$string ?: 12',
 			],
 			[
-				'12|non-empty-string',
+				'12|non-falsy-string',
 				'$stringOrNull ?: 12',
 			],
 			[
-				'12|non-empty-string',
+				'12|non-falsy-string',
 				'@$stringOrNull ?: 12',
 			],
 			[
@@ -2308,11 +2308,11 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$line',
 			],
 			[
-				(new ConstantStringType(__DIR__ . '/data'))->describe(VerbosityLevel::precise()),
+				'literal-string&non-falsy-string',
 				'$dir',
 			],
 			[
-				(new ConstantStringType(__DIR__ . '/data/binary.php'))->describe(VerbosityLevel::precise()),
+				'literal-string&non-falsy-string',
 				'$file',
 			],
 			[
@@ -2436,11 +2436,11 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'min(1, 2.2, 3.3)',
 			],
 			[
-				'non-empty-string',
+				'non-falsy-string',
 				'"Hello $world"',
 			],
 			[
-				'non-empty-string',
+				'non-falsy-string',
 				'$string .= "str"',
 			],
 			[
@@ -2696,8 +2696,48 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$mixed - $mixed',
 			],
 			[
-				'*ERROR*',
+				'array',
 				'$mixed + []',
+			],
+			[
+				'array|int',
+				'$intOrArray + $intOrArray',
+			],
+			[
+				'float|int',
+				'$intOrFloat + $intOrFloat',
+			],
+			[
+				'array|float',
+				'$floatOrArray + $floatOrArray',
+			],
+			[
+				'array|bool|float|int|string',
+				'$plusable + $plusable',
+			],
+			[
+				'array',
+				'$mixedNoFloat + []',
+			],
+			[
+				'(float|int)',
+				'$mixedNoFloat + 5',
+			],
+			[
+				'(float|int)',
+				'$mixedNoInt + 5',
+			],
+			[
+				'*ERROR*',
+				'$mixedNoArray + []',
+			],
+			[
+				'*ERROR*',
+				'$mixedNoArrayOrInt + []',
+			],
+			[
+				'*ERROR*',
+				'$integer + []',
 			],
 			[
 				'124',
@@ -2744,8 +2784,16 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'5 & 3',
 			],
 			[
-				'int',
+				'int<0, 3>',
 				'$integer & 3',
+			],
+			[
+				'int<0, 7>',
+				'7 & $integer',
+			],
+			[
+				'int',
+				'$integer & $integer',
 			],
 			[
 				'\'x\'',
@@ -2796,7 +2844,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$integer ^ 3',
 			],
 			[
-				'\'' . "\x01" . '\'',
+				'"\001"',
 				'"x" ^ "y"',
 			],
 			[
@@ -2812,7 +2860,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'"5" ^ 3',
 			],
 			[
-				'int',
+				'int<0, 3>',
 				'$integer &= 3',
 			],
 			[
@@ -2948,15 +2996,15 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$decrementedFooString',
 			],
 			[
-				'literal-string&non-empty-string',
+				'literal-string&non-falsy-string',
 				'$conditionalString . $conditionalString',
 			],
 			[
-				'literal-string&non-empty-string',
+				'literal-string&non-falsy-string',
 				'$conditionalString . $anotherConditionalString',
 			],
 			[
-				'literal-string&non-empty-string',
+				'literal-string&non-falsy-string',
 				'$anotherConditionalString . $conditionalString',
 			],
 			[
@@ -3048,7 +3096,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				"sprintf('%s %s', 'foo', 'bar')",
 			],
 			[
-				'array{}|array{0: \'password\'|\'username\', 1?: \'password\'}',
+				'array{}|array{\'password\'}|array{0: \'username\', 1?: \'password\'}',
 				'$coalesceArray',
 			],
 			[
@@ -3080,7 +3128,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$simpleXMLReturningXML',
 			],
 			[
-				'non-empty-string',
+				'non-falsy-string',
 				'$xmlString',
 			],
 			[
@@ -4447,8 +4495,12 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$filteredIntegers[0]',
 			],
 			[
-				'123',
+				'*ERROR*',
 				'$filteredMixed[0]',
+			],
+			[
+				'123',
+				'$filteredMixed[1]',
 			],
 			[
 				'non-empty-array<0|1|2, 1|2|3>',
@@ -4555,11 +4607,11 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'array_intersect_assoc($integers, [])',
 			],
 			[
-				'array<0|1|2, 1|2|3>',
+				'array{}',
 				'array_intersect_key($integers, [])',
 			],
 			[
-				'array<int, int>',
+				'array{1, 2, 3}|array{4, 5, 6}',
 				'array_intersect_key(...[$integers, [4, 5, 6]])',
 			],
 			[
@@ -4669,6 +4721,19 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 			[
 				"array{foo: 'foo', 0: stdClass, bar: stdClass}",
 				'array_merge($stringOrIntegerKeys, $stringKeys)',
+			],
+			[
+				'array{foo: 1, bar: 2, 0: 2, 1: 3}',
+				"array_merge(['foo' => 4, 'bar' => 5], ...[['foo' => 1, 'bar' => 2], [2, 3]])",
+			],
+			[
+				'array{foo: 1, foo2: stdClass}',
+				'array_merge([\'foo\' => new stdClass()], ...[[\'foo2\' => new stdClass()], [\'foo\' => 1]])',
+			],
+
+			[
+				'array{foo: 1, foo2: stdClass}',
+				'array_merge([\'foo\' => new stdClass()], ...[[\'foo2\' => new stdClass()], [\'foo\' => 1]])',
 			],
 			[
 				"array{color: 'green', 0: 2, 1: 4, 2: 'a', 3: 'b', shape: 'trapezoid', 4: 4}",
@@ -5364,7 +5429,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$strSplitConstantStringWithInvalidSplitLengthType',
 			],
 			[
-				'array{\'a\'|\'g\', \'b\'|\'h\', \'c\'|\'i\', \'d\'|\'j\', \'e\'|\'k\', \'f\'|\'l\'}',
+				"array{'a', 'b', 'c', 'd', 'e', 'f'}|array{'g', 'h', 'i', 'j', 'k', 'l'}",
 				'$strSplitConstantStringWithVariableStringAndConstantSplitLength',
 			],
 			[
@@ -5385,7 +5450,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$parseUrlConstantUrlWithoutComponent2',
 			],
 			[
-				'array{scheme?: string, host?: string, port?: int, user?: string, pass?: string, path?: string, query?: string, fragment?: string}|false',
+				'array{scheme?: string, host?: string, port?: int<0, 65535>, user?: string, pass?: string, path?: string, query?: string, fragment?: string}|false',
 				'$parseUrlConstantUrlUnknownComponent',
 			],
 			[
@@ -5405,11 +5470,11 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$parseUrlStringUrlWithComponentInvalid',
 			],
 			[
-				'int|false|null',
+				'int<0, 65535>|false|null',
 				'$parseUrlStringUrlWithComponentPort',
 			],
 			[
-				'array{scheme?: string, host?: string, port?: int, user?: string, pass?: string, path?: string, query?: string, fragment?: string}|false',
+				'array{scheme?: string, host?: string, port?: int<0, 65535>, user?: string, pass?: string, path?: string, query?: string, fragment?: string}|false',
 				'$parseUrlStringUrlWithoutComponent',
 			],
 			[
@@ -5607,7 +5672,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'range(1, doFoo() ? 1 : 2)',
 			],
 			[
-				'array{0: -1|1, 1?: 0|2, 2?: 1, 3?: 2}',
+				'array{0: -1, 1: 0, 2: 1, 3?: 2}|array{0: 1, 1?: 2}',
 				'range(doFoo() ? -1 : 1, doFoo() ? 1 : 2)',
 			],
 			[
@@ -7234,6 +7299,18 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'reset($conditionalArray)',
 			],
 			[
+				'0|1',
+				'reset($constantArrayOptionalKeys1)',
+			],
+			[
+				'0',
+				'reset($constantArrayOptionalKeys2)',
+			],
+			[
+				'0',
+				'reset($constantArrayOptionalKeys3)',
+			],
+			[
 				'mixed',
 				'end()',
 			],
@@ -7257,6 +7334,18 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'\'bar\'|\'baz\'',
 				'end($secondConditionalArray)',
 			],
+			[
+				'2',
+				'end($constantArrayOptionalKeys1)',
+			],
+			[
+				'2',
+				'end($constantArrayOptionalKeys2)',
+			],
+			[
+				'1|2',
+				'end($constantArrayOptionalKeys3)',
+			],
 		];
 	}
 
@@ -7279,7 +7368,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 	{
 		return [
 			[
-				'non-empty-string',
+				'non-falsy-string',
 				'$expectedString',
 			],
 			[
@@ -7287,7 +7376,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$expectedString2',
 			],
 			[
-				'non-empty-string|null',
+				'non-falsy-string|null',
 				'$anotherExpectedString',
 			],
 			[
@@ -7940,7 +8029,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$array',
 			],
 			[
-				'array&hasOffsetValue(\'key\', mixed~null)',
+				'array&hasOffsetValue(\'key\', mixed)',
 				'$generalArray',
 			],
 			[
@@ -7956,7 +8045,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$arrayAppendedInForeach',
 			],
 			[
-				'non-empty-array<int<0, max>, literal-string&non-empty-string>', // could be 'array<int<0, max>, \'bar\'|\'baz\'|\'foo\'>'
+				'non-empty-array<int<0, max>, literal-string&non-falsy-string>', // could be 'array<int<0, max>, \'bar\'|\'baz\'|\'foo\'>'
 				'$anotherArrayAppendedInForeach',
 			],
 			[
@@ -8322,19 +8411,19 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$array[\'b\']',
 			],
 			[
-				'array{a: 1|2|3, b: 2|3, c?: 4}',
+				'array{a: 1, b: 2}|array{a: 3, b: 3, c: 4}',
 				'$array',
 			],
 			[
-				'array{a: 1|2|3, b: 2|3|null, c?: 4}',
+				'array{a: 1, b: 2}|array{a: 3, b: 3, c: 4}|array{a: 3, b: null}',
 				'$arrayCopy',
 			],
 			[
-				'array{a: 1|2|3, c?: 4}',
+				'array{a: 2}',
 				'$anotherArrayCopy',
 			],
 			[
-				'array{a: 1|2|3, b?: 2|3|null, c?: 4}',
+				'array{a: 1, b: 2}|array{a: 2}|array{a: 3, b: 3, c: 4}|array{a: 3, b: null}',
 				'$yetAnotherArrayCopy',
 			],
 			[
@@ -8366,7 +8455,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$lookup[$a] ?? false',
 			],
 			[
-				'\'foo\'|false',
+				'\'foo\'',
 				'$nullableArray[\'a\'] ?? false',
 			],
 			[
@@ -8374,7 +8463,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$nullableArray[\'b\'] ?? false',
 			],
 			[
-				'\'baz\'|false',
+				'\'baz\'',
 				'$nullableArray[\'c\'] ?? false',
 			],
 		];
@@ -8684,6 +8773,30 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'array_key_last($anotherLiteralArray)',
 			],
 			[
+				"'a'|'b'",
+				'array_key_first($constantArrayOptionalKeys1)',
+			],
+			[
+				"'c'",
+				'array_key_last($constantArrayOptionalKeys1)',
+			],
+			[
+				"'a'",
+				'array_key_first($constantArrayOptionalKeys2)',
+			],
+			[
+				"'c'",
+				'array_key_last($constantArrayOptionalKeys2)',
+			],
+			[
+				"'a'",
+				'array_key_first($constantArrayOptionalKeys3)',
+			],
+			[
+				"'b'|'c'",
+				'array_key_last($constantArrayOptionalKeys3)',
+			],
+			[
 				'array{int, int}',
 				'$hrtime1',
 			],
@@ -8752,7 +8865,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$mbStrSplitConstantStringWithInvalidSplitLengthType',
 			],
 			[
-				'array{\'a\'|\'g\', \'b\'|\'h\', \'c\'|\'i\', \'d\'|\'j\', \'e\'|\'k\', \'f\'|\'l\'}',
+				"array{'a', 'b', 'c', 'd', 'e', 'f'}|array{'g', 'h', 'i', 'j', 'k', 'l'}",
 				'$mbStrSplitConstantStringWithVariableStringAndConstantSplitLength',
 			],
 			[
@@ -8808,7 +8921,7 @@ class LegacyNodeScopeResolverTest extends TypeInferenceTestCase
 				'$mbStrSplitConstantStringWithInvalidSplitLengthTypeAndVariableEncoding',
 			],
 			[
-				'array{\'a\'|\'g\', \'b\'|\'h\', \'c\'|\'i\', \'d\'|\'j\', \'e\'|\'k\', \'f\'|\'l\'}',
+				"array{'a', 'b', 'c', 'd', 'e', 'f'}|array{'g', 'h', 'i', 'j', 'k', 'l'}",
 				'$mbStrSplitConstantStringWithVariableStringAndConstantSplitLengthAndValidEncoding',
 			],
 			[

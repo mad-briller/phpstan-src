@@ -33,17 +33,19 @@ class ArrayShiftFunctionReturnTypeExtension implements DynamicFunctionReturnType
 			return new NullType();
 		}
 
-		$constantArrays = TypeUtils::getConstantArrays($argType);
+		$constantArrays = TypeUtils::getOldConstantArrays($argType);
 		if (count($constantArrays) > 0) {
 			$valueTypes = [];
 			foreach ($constantArrays as $constantArray) {
-				$arrayKeyTypes = $constantArray->getKeyTypes();
-				if (count($arrayKeyTypes) === 0) {
+				$iterableAtLeastOnce = $constantArray->isIterableAtLeastOnce();
+				if (!$iterableAtLeastOnce->yes()) {
 					$valueTypes[] = new NullType();
+				}
+				if ($iterableAtLeastOnce->no()) {
 					continue;
 				}
 
-				$valueTypes[] = $constantArray->getOffsetValueType($arrayKeyTypes[0]);
+				$valueTypes[] = $constantArray->getFirstValueType();
 			}
 
 			return TypeCombinator::union(...$valueTypes);

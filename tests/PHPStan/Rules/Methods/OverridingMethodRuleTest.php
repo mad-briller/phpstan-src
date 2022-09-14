@@ -481,6 +481,31 @@ class OverridingMethodRuleTest extends RuleTestCase
 						40,
 						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
 					],
+					[
+						'Return type mixed of method TentativeReturnTypes\UntypedIterator::current() is not covariant with tentative return type mixed of method Iterator::current().',
+						75,
+						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
+					],
+					[
+						'Return type mixed of method TentativeReturnTypes\UntypedIterator::next() is not covariant with tentative return type void of method Iterator::next().',
+						79,
+						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
+					],
+					[
+						'Return type mixed of method TentativeReturnTypes\UntypedIterator::key() is not covariant with tentative return type mixed of method Iterator::key().',
+						83,
+						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
+					],
+					[
+						'Return type mixed of method TentativeReturnTypes\UntypedIterator::valid() is not covariant with tentative return type bool of method Iterator::valid().',
+						87,
+						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
+					],
+					[
+						'Return type mixed of method TentativeReturnTypes\UntypedIterator::rewind() is not covariant with tentative return type void of method Iterator::rewind().',
+						91,
+						'Make it covariant, or use the #[\ReturnTypeWillChange] attribute to temporarily suppress the error.',
+					],
 				],
 			],
 		];
@@ -510,6 +535,24 @@ class OverridingMethodRuleTest extends RuleTestCase
 	{
 		$this->phpVersionId = PHP_VERSION_ID;
 		$this->analyse([__DIR__ . '/data/bug-6264.php'], []);
+	}
+
+	public function testBug7717(): void
+	{
+		if (PHP_VERSION_ID < 70400) {
+			$this->markTestSkipped('Test requires PHP 7.4.');
+		}
+		$this->phpVersionId = PHP_VERSION_ID;
+		$this->analyse([__DIR__ . '/data/bug-7717.php'], []);
+	}
+
+	public function testBug6104(): void
+	{
+		if (PHP_VERSION_ID < 70400) {
+			$this->markTestSkipped('Test requires PHP 7.4.');
+		}
+		$this->phpVersionId = PHP_VERSION_ID;
+		$this->analyse([__DIR__ . '/data/bug-6104.php'], []);
 	}
 
 }

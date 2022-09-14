@@ -6,18 +6,15 @@ use PhpParser\Node\Expr\FuncCall;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Reflection\ParametersAcceptorSelector;
-use PHPStan\Type\ArrayType;
 use PHPStan\Type\Constant\ConstantArrayType;
 use PHPStan\Type\Constant\ConstantBooleanType;
 use PHPStan\Type\ConstantScalarType;
 use PHPStan\Type\DynamicFunctionReturnTypeExtension;
-use PHPStan\Type\IntersectionType;
-use PHPStan\Type\MixedType;
 use PHPStan\Type\NullType;
 use PHPStan\Type\ObjectWithoutClassType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
-use PHPStan\Type\UnionType;
+use PHPStan\Type\TypeUtils;
 use function count;
 
 final class ArraySearchFunctionDynamicReturnTypeExtension implements DynamicFunctionReturnTypeExtension
@@ -36,7 +33,7 @@ final class ArraySearchFunctionDynamicReturnTypeExtension implements DynamicFunc
 		}
 
 		$haystackArgType = $scope->getType($functionCall->getArgs()[1]->value);
-		$haystackIsArray = (new ArrayType(new MixedType(), new MixedType()))->isSuperTypeOf($haystackArgType);
+		$haystackIsArray = $haystackArgType->isArray();
 		if ($haystackIsArray->no()) {
 			return new NullType();
 		}
@@ -46,9 +43,7 @@ final class ArraySearchFunctionDynamicReturnTypeExtension implements DynamicFunc
 		}
 
 		$strictArgType = $scope->getType($functionCall->getArgs()[2]->value);
-		if (!($strictArgType instanceof ConstantBooleanType)) {
-			return TypeCombinator::union($haystackArgType->getIterableKeyType(), new ConstantBooleanType(false), new NullType());
-		} elseif ($strictArgType->getValue() === false) {
+		if (!$strictArgType instanceof ConstantBooleanType || $strictArgType->getValue() === false) {
 			return TypeCombinator::union($haystackArgType->getIterableKeyType(), new ConstantBooleanType(false));
 		}
 
@@ -62,7 +57,7 @@ final class ArraySearchFunctionDynamicReturnTypeExtension implements DynamicFunc
 			$typesFromConstantArrays[] = new NullType();
 		}
 
-		$haystackArrays = $this->pickArrays($haystackArgType);
+		$haystackArrays = TypeUtils::getAnyArrays($haystackArgType);
 		if (count($haystackArrays) === 0) {
 			return ParametersAcceptorSelector::selectSingle($functionReflection->getVariants())->getReturnType();
 		}
@@ -132,32 +127,6 @@ final class ArraySearchFunctionDynamicReturnTypeExtension implements DynamicFunc
 		}
 
 		return new ConstantBooleanType(false);
-	}
-
-	/**
-	 * @return Type[]
-	 */
-	private function pickArrays(Type $type): array
-	{
-		if ($type instanceof ArrayType) {
-			return [$type];
-		}
-
-		if ($type instanceof UnionType || $type instanceof IntersectionType) {
-			$arrayTypes = [];
-
-			foreach ($type->getTypes() as $innerType) {
-				if (!($innerType instanceof ArrayType)) {
-					continue;
-				}
-
-				$arrayTypes[] = $innerType;
-			}
-
-			return $arrayTypes;
-		}
-
-		return [];
 	}
 
 }

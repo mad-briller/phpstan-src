@@ -17,7 +17,7 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 
 	protected function getRule(): Rule
 	{
-		$ruleLevelHelper = new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed);
+		$ruleLevelHelper = new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed, false);
 
 		return new NonexistentOffsetInArrayDimFetchRule(
 			$ruleLevelHelper,
@@ -84,7 +84,7 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 				145,
 			],
 			[
-				'Offset \'c\' does not exist on array{c: bool}|array{e: true}.',
+				'Offset \'c\' does not exist on array{c: false}|array{c: true}|array{e: true}.',
 				171,
 			],
 			[
@@ -164,8 +164,12 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 				443,
 			],
 			[
-				'Offset \'feature_pretty…\' does not exist on array{version: non-empty-string, commit: string|null, pretty_version: string|null, feature_version: non-empty-string, feature_pretty_version?: string|null}.',
+				'Offset \'feature_pretty…\' does not exist on array{version: non-falsy-string, commit: string|null, pretty_version: string|null, feature_version: non-falsy-string, feature_pretty_version?: string|null}.',
 				504,
+			],
+			[
+				"Cannot access offset 'foo' on bool.",
+				517,
 			],
 		]);
 	}
@@ -248,7 +252,7 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 	{
 		$this->analyse([__DIR__ . '/data/bug-3782.php'], [
 			[
-				'Cannot access offset (int|string) on Bug3782\HelloWorld.',
+				'Cannot access offset (int|string) on $this(Bug3782\HelloWorld)|(ArrayAccess&Bug3782\HelloWorld).',
 				11,
 			],
 		]);
@@ -425,12 +429,7 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 	public function testBug6000(): void
 	{
 		$this->checkExplicitMixed = true;
-		$this->analyse([__DIR__ . '/data/bug-6000.php'], [
-			[
-				'Offset \'classmap\' does not exist on array{psr-4?: array<string, array<string>|string>, classmap?: array<int, string>}.',
-				12,
-			],
-		]);
+		$this->analyse([__DIR__ . '/data/bug-6000.php'], []);
 	}
 
 	public function testBug5743(): void
@@ -473,6 +472,65 @@ class NonexistentOffsetInArrayDimFetchRuleTest extends RuleTestCase
 				42,
 			],
 		]);
+	}
+
+	public function testBug7469(): void
+	{
+		$expected = [];
+
+		if (PHP_VERSION_ID < 80000) {
+			$expected = [
+				[
+					"Cannot access offset 'languages' on array<'address'|'bankAccount'|'birthDate'|'email'|'firstName'|'ic'|'invoicing'|'invoicingAddress'|'languages'|'lastName'|'note'|'phone'|'radio'|'videoOnline'|'videoTvc'|'voiceExample', mixed>|false.",
+					31,
+				],
+				[
+					"Cannot access offset 'languages' on array<'address'|'bankAccount'|'birthDate'|'email'|'firstName'|'ic'|'invoicing'|'invoicingAddress'|'languages'|'lastName'|'note'|'phone'|'radio'|'videoOnline'|'videoTvc'|'voiceExample', mixed>|false.",
+					31,
+				],
+			];
+		}
+
+		$this->analyse([__DIR__ . '/data/bug-7469.php'], $expected);
+	}
+
+	public function testBug7763(): void
+	{
+		if (PHP_VERSION_ID < 80100) {
+			$this->markTestSkipped('Test requires PHP 8.1.');
+		}
+
+		$this->analyse([__DIR__ . '/data/bug-7763.php'], []);
+	}
+
+	public function testSpecifyExistentOffsetWhenEnteringForeach(): void
+	{
+		$this->analyse([__DIR__ . '/data/specify-existent-offset-when-entering-foreach.php'], []);
+	}
+
+	public function testBug3872(): void
+	{
+		$this->analyse([__DIR__ . '/data/bug-3872.php'], []);
+	}
+
+	public function testBug6783(): void
+	{
+		$this->analyse([__DIR__ . '/data/bug-6783.php'], []);
+	}
+
+	public function testSlevomatForeachUnsetBug(): void
+	{
+		$this->analyse([__DIR__ . '/data/slevomat-foreach-unset-bug.php'], []);
+	}
+
+	public function testSlevomatForeachArrayKeyExistsBug(): void
+	{
+		$this->analyse([__DIR__ . '/data/slevomat-foreach-array-key-exists-bug.php'], []);
+	}
+
+	public function testBug7954(): void
+	{
+		$this->analyse([__DIR__ . '/data/bug-7954.php'], []);
 	}
 
 }

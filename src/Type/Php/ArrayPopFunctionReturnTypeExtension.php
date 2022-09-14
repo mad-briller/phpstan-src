@@ -33,17 +33,18 @@ class ArrayPopFunctionReturnTypeExtension implements DynamicFunctionReturnTypeEx
 			return new NullType();
 		}
 
-		$constantArrays = TypeUtils::getConstantArrays($argType);
+		$constantArrays = TypeUtils::getOldConstantArrays($argType);
 		if (count($constantArrays) > 0) {
 			$valueTypes = [];
 			foreach ($constantArrays as $constantArray) {
-				$arrayKeyTypes = $constantArray->getKeyTypes();
-				if (count($arrayKeyTypes) === 0) {
+				$iterableAtLeastOnce = $constantArray->isIterableAtLeastOnce();
+				if (!$iterableAtLeastOnce->yes()) {
 					$valueTypes[] = new NullType();
+				}
+				if ($iterableAtLeastOnce->no()) {
 					continue;
 				}
-
-				$valueTypes[] = $constantArray->getOffsetValueType($arrayKeyTypes[count($arrayKeyTypes) - 1]);
+				$valueTypes[] = $constantArray->getLastValueType();
 			}
 
 			return TypeCombinator::union(...$valueTypes);

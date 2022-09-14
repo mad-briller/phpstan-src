@@ -7,6 +7,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\DynamicFunctionReturnTypeExtension;
 use PHPStan\Type\IntersectionType;
@@ -84,20 +85,20 @@ class ReplaceFunctionsDynamicReturnTypeExtension implements DynamicFunctionRetur
 			if (count($functionCall->getArgs()) > $replaceArgumentPosition) {
 				$replaceArgumentType = $scope->getType($functionCall->getArgs()[$replaceArgumentPosition]->value);
 
+				if ($subjectArgumentType->isNonFalsyString()->yes() && $replaceArgumentType->isNonFalsyString()->yes()) {
+					return new IntersectionType([new StringType(), new AccessoryNonFalsyStringType()]);
+				}
 				if ($replaceArgumentType->isNonEmptyString()->yes()) {
 					return new IntersectionType([new StringType(), new AccessoryNonEmptyStringType()]);
 				}
 			}
 		}
 
-		$stringType = new StringType();
-		$arrayType = new ArrayType(new MixedType(), new MixedType());
-
-		$isStringSuperType = $stringType->isSuperTypeOf($subjectArgumentType);
-		$isArraySuperType = $arrayType->isSuperTypeOf($subjectArgumentType);
+		$isStringSuperType = $subjectArgumentType->isString();
+		$isArraySuperType = $subjectArgumentType->isArray();
 		$compareSuperTypes = $isStringSuperType->compareTo($isArraySuperType);
 		if ($compareSuperTypes === $isStringSuperType) {
-			return $stringType;
+			return new StringType();
 		} elseif ($compareSuperTypes === $isArraySuperType) {
 			if ($subjectArgumentType instanceof ArrayType) {
 				return $subjectArgumentType->generalizeValues();

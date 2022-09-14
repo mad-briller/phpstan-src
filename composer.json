@@ -6,6 +6,7 @@
 	],
 	"require": {
 		"php": "^8.0",
+		"composer-runtime-api": "^2.0",
 		"clue/block-react": "^1.4",
 		"clue/ndjson-react": "^1.0",
 		"composer/ca-bundle": "^1.2",
@@ -13,7 +14,6 @@
 		"hoa/compiler": "3.17.08.08",
 		"hoa/exception": "^1.0",
 		"hoa/regex": "1.17.01.13",
-		"jean85/pretty-package-versions": "^1.0.3",
 		"jetbrains/phpstorm-stubs": "dev-master#01006d9854679672fc8b85c6d5063ea6f25226ac",
 		"nette/bootstrap": "^3.0",
 		"nette/di": "^3.0.11",
@@ -21,11 +21,11 @@
 		"nette/neon": "^3.3.1",
 		"nette/schema": "^1.2.2",
 		"nette/utils": "^3.2.5",
-		"nikic/php-parser": "^4.14.0",
+		"nikic/php-parser": "^4.15.0",
 		"ondram/ci-detector": "^3.4.0",
-		"ondrejmirtes/better-reflection": "5.6.0.2",
-		"phpstan/php-8-stubs": "0.3.27",
-		"phpstan/phpdoc-parser": "1.6.4",
+		"ondrejmirtes/better-reflection": "5.8.0.1",
+		"phpstan/php-8-stubs": "0.3.37",
+		"phpstan/phpdoc-parser": "1.8.0",
 		"react/child-process": "^0.6.4",
 		"react/event-loop": "^1.2",
 		"react/http": "^1.1",
@@ -49,7 +49,7 @@
 		"phpstan/phpstan": "self.version"
 	},
 	"require-dev": {
-		"brianium/paratest": "^6.4.3",
+		"brianium/paratest": "^6.5",
 		"loophp/phposinfo": "1.6.5",
 		"php-parallel-lint/php-parallel-lint": "^1.2.0",
 		"phpstan/phpstan-deprecation-rules": "^1.0",
@@ -68,7 +68,6 @@
 		"platform-check": false,
 		"sort-packages": true,
 		"allow-plugins": {
-			"composer/package-versions-deprecated": true,
 			"vaimo/composer-patches": true
 		}
 	},

@@ -4,13 +4,13 @@ namespace PHPStan\Reflection\Type;
 
 use PHPStan\Reflection\ClassMemberReflection;
 use PHPStan\Reflection\ClassReflection;
-use PHPStan\Reflection\FunctionVariant;
 use PHPStan\Reflection\MethodReflection;
-use PHPStan\Reflection\ParametersAcceptor;
+use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
 use function array_map;
+use function array_merge;
 use function count;
 use function implode;
 
@@ -74,21 +74,14 @@ class UnionTypeMethodReflection implements MethodReflection
 
 	public function getVariants(): array
 	{
-		$variants = $this->methods[0]->getVariants();
-		$returnType = TypeCombinator::union(...array_map(static fn (MethodReflection $method): Type => TypeCombinator::union(...array_map(static fn (ParametersAcceptor $acceptor): Type => $acceptor->getReturnType(), $method->getVariants())), $this->methods));
+		$variants = array_merge(...array_map(static fn (MethodReflection $method) => $method->getVariants(), $this->methods));
 
-		return array_map(static fn (ParametersAcceptor $acceptor): ParametersAcceptor => new FunctionVariant(
-			$acceptor->getTemplateTypeMap(),
-			$acceptor->getResolvedTemplateTypeMap(),
-			$acceptor->getParameters(),
-			$acceptor->isVariadic(),
-			$returnType,
-		), $variants);
+		return [ParametersAcceptorSelector::combineAcceptors($variants)];
 	}
 
 	public function isDeprecated(): TrinaryLogic
 	{
-		return TrinaryLogic::extremeIdentity(...array_map(static fn (MethodReflection $method): TrinaryLogic => $method->isDeprecated(), $this->methods));
+		return TrinaryLogic::lazyExtremeIdentity($this->methods, static fn (MethodReflection $method): TrinaryLogic => $method->isDeprecated());
 	}
 
 	public function getDeprecatedDescription(): ?string
@@ -115,12 +108,12 @@ class UnionTypeMethodReflection implements MethodReflection
 
 	public function isFinal(): TrinaryLogic
 	{
-		return TrinaryLogic::extremeIdentity(...array_map(static fn (MethodReflection $method): TrinaryLogic => $method->isFinal(), $this->methods));
+		return TrinaryLogic::lazyExtremeIdentity($this->methods, static fn (MethodReflection $method): TrinaryLogic => $method->isFinal());
 	}
 
 	public function isInternal(): TrinaryLogic
 	{
-		return TrinaryLogic::extremeIdentity(...array_map(static fn (MethodReflection $method): TrinaryLogic => $method->isInternal(), $this->methods));
+		return TrinaryLogic::lazyExtremeIdentity($this->methods, static fn (MethodReflection $method): TrinaryLogic => $method->isInternal());
 	}
 
 	public function getThrowType(): ?Type
@@ -145,7 +138,7 @@ class UnionTypeMethodReflection implements MethodReflection
 
 	public function hasSideEffects(): TrinaryLogic
 	{
-		return TrinaryLogic::extremeIdentity(...array_map(static fn (MethodReflection $method): TrinaryLogic => $method->hasSideEffects(), $this->methods));
+		return TrinaryLogic::lazyExtremeIdentity($this->methods, static fn (MethodReflection $method): TrinaryLogic => $method->hasSideEffects());
 	}
 
 	public function getDocComment(): ?string

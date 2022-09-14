@@ -20,7 +20,7 @@ class ClassConstantRuleTest extends RuleTestCase
 	protected function getRule(): Rule
 	{
 		$broker = $this->createReflectionProvider();
-		return new ClassConstantRule($broker, new RuleLevelHelper($broker, true, false, true, false), new ClassCaseSensitivityCheck($broker, true), new PhpVersion($this->phpVersion));
+		return new ClassConstantRule($broker, new RuleLevelHelper($broker, true, false, true, false, false), new ClassCaseSensitivityCheck($broker, true), new PhpVersion($this->phpVersion));
 	}
 
 	public function testClassConstant(): void
@@ -198,6 +198,10 @@ class ClassConstantRuleTest extends RuleTestCase
 					[
 						'Accessing ::class constant on an expression is supported only on PHP 8.0 and later.',
 						18,
+					],
+					[
+						'Accessing ::class constant on an expression is supported only on PHP 8.0 and later.',
+						19,
 					],
 				],
 			],

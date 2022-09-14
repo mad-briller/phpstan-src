@@ -16,8 +16,10 @@ use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Accessory\AccessoryLiteralStringType;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\Accessory\AccessoryNumericStringType;
 use PHPStan\Type\Accessory\AccessoryType;
+use PHPStan\Type\Accessory\HasOffsetValueType;
 use PHPStan\Type\Accessory\NonEmptyArrayType;
 use PHPStan\Type\Generic\TemplateType;
 use PHPStan\Type\Generic\TemplateTypeMap;
@@ -25,6 +27,7 @@ use PHPStan\Type\Generic\TemplateTypeVariance;
 use PHPStan\Type\Traits\NonGeneralizableTypeTrait;
 use PHPStan\Type\Traits\NonRemoveableTypeTrait;
 use function array_map;
+use function array_values;
 use function count;
 use function implode;
 use function in_array;
@@ -39,21 +42,43 @@ class IntersectionType implements CompoundType
 	use NonRemoveableTypeTrait;
 	use NonGeneralizableTypeTrait;
 
+	/** @var Type[] */
+	private array $types;
+
 	private bool $sortedTypes = false;
 
 	/**
 	 * @api
 	 * @param Type[] $types
 	 */
-	public function __construct(private array $types)
+	public function __construct(array $types)
 	{
-		if (count($types) < 2) {
+		$hasOffsetValueTypeCount = 0;
+		$newTypes = [];
+		foreach ($types as $type) {
+			if (!$type instanceof HasOffsetValueType) {
+				$newTypes[] = $type;
+				continue;
+			}
+
+			$hasOffsetValueTypeCount++;
+			if ($hasOffsetValueTypeCount > 32) {
+				continue;
+			}
+
+			$newTypes[] = $type;
+		}
+
+		$newTypes = array_values($newTypes);
+		if (count($newTypes) < 2) {
 			throw new ShouldNotHappenException(sprintf(
 				'Cannot create %s with: %s',
 				self::class,
-				implode(', ', array_map(static fn (Type $type): string => $type->describe(VerbosityLevel::value()), $types)),
+				implode(', ', array_map(static fn (Type $type): string => $type->describe(VerbosityLevel::value()), $newTypes)),
 			));
 		}
+
+		$this->types = $newTypes;
 	}
 
 	/**
@@ -119,12 +144,7 @@ class IntersectionType implements CompoundType
 			return TrinaryLogic::createYes();
 		}
 
-		$results = [];
-		foreach ($this->getTypes() as $innerType) {
-			$results[] = $innerType->isSuperTypeOf($otherType);
-		}
-
-		return TrinaryLogic::createYes()->and(...$results);
+		return TrinaryLogic::createYes()->lazyAnd($this->getTypes(), static fn (Type $innerType) => $innerType->isSuperTypeOf($otherType));
 	}
 
 	public function isSubTypeOf(Type $otherType): TrinaryLogic
@@ -133,22 +153,12 @@ class IntersectionType implements CompoundType
 			return $otherType->isSuperTypeOf($this);
 		}
 
-		$results = [];
-		foreach ($this->getTypes() as $innerType) {
-			$results[] = $otherType->isSuperTypeOf($innerType);
-		}
-
-		return TrinaryLogic::maxMin(...$results);
+		return TrinaryLogic::lazyMaxMin($this->getTypes(), static fn (Type $innerType) => $otherType->isSuperTypeOf($innerType));
 	}
 
 	public function isAcceptedBy(Type $acceptingType, bool $strictTypes): TrinaryLogic
 	{
-		$results = [];
-		foreach ($this->getTypes() as $innerType) {
-			$results[] = $acceptingType->accepts($innerType, $strictTypes);
-		}
-
-		return TrinaryLogic::maxMin(...$results);
+		return TrinaryLogic::lazyMaxMin($this->getTypes(), static fn (Type $innerType) => $acceptingType->accepts($innerType, $strictTypes));
 	}
 
 	public function equals(Type $type): bool
@@ -205,8 +215,32 @@ class IntersectionType implements CompoundType
 	{
 		$typesToDescribe = [];
 		$skipTypeNames = [];
+
+		$nonEmptyStr = false;
+		$nonFalsyStr = false;
 		foreach ($this->getSortedTypes() as $type) {
-			if ($type instanceof AccessoryNonEmptyStringType || $type instanceof AccessoryLiteralStringType || $type instanceof AccessoryNumericStringType) {
+			if ($type instanceof AccessoryNonEmptyStringType
+				|| $type instanceof AccessoryLiteralStringType
+				|| $type instanceof AccessoryNumericStringType
+				|| $type instanceof AccessoryNonFalsyStringType
+			) {
+				if ($type instanceof AccessoryNonFalsyStringType) {
+					$nonFalsyStr = true;
+				}
+				if ($type instanceof AccessoryNonEmptyStringType) {
+					$nonEmptyStr = true;
+				}
+				if ($nonEmptyStr && $nonFalsyStr) {
+					// prevent redundant 'non-empty-string&non-falsy-string'
+					foreach ($typesToDescribe as $key => $typeToDescribe) {
+						if (!($typeToDescribe instanceof AccessoryNonEmptyStringType)) {
+							continue;
+						}
+
+						unset($typesToDescribe[$key]);
+					}
+				}
+
 				$typesToDescribe[] = $type;
 				$skipTypeNames[] = 'string';
 				continue;
@@ -399,6 +433,11 @@ class IntersectionType implements CompoundType
 	public function isNonEmptyString(): TrinaryLogic
 	{
 		return $this->intersectResults(static fn (Type $type): TrinaryLogic => $type->isNonEmptyString());
+	}
+
+	public function isNonFalsyString(): TrinaryLogic
+	{
+		return $this->intersectResults(static fn (Type $type): TrinaryLogic => $type->isNonFalsyString());
 	}
 
 	public function isLiteralString(): TrinaryLogic
@@ -601,8 +640,7 @@ class IntersectionType implements CompoundType
 	 */
 	private function intersectResults(callable $getResult): TrinaryLogic
 	{
-		$operands = array_map($getResult, $this->types);
-		return TrinaryLogic::maxMin(...$operands);
+		return TrinaryLogic::lazyMaxMin($this->types, $getResult);
 	}
 
 	/**

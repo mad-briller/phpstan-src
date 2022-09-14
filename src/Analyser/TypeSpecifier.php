@@ -26,9 +26,11 @@ use PHPStan\Reflection\ResolvedFunctionVariant;
 use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\Accessory\HasOffsetType;
 use PHPStan\Type\Accessory\HasPropertyType;
 use PHPStan\Type\Accessory\NonEmptyArrayType;
+use PHPStan\Type\ArrayType;
 use PHPStan\Type\BooleanType;
 use PHPStan\Type\ConditionalTypeForParameter;
 use PHPStan\Type\Constant\ConstantArrayType;
@@ -51,6 +53,7 @@ use PHPStan\Type\NonexistentParentClassType;
 use PHPStan\Type\NullType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\ObjectWithoutClassType;
+use PHPStan\Type\ResourceType;
 use PHPStan\Type\StaticMethodTypeSpecifyingExtension;
 use PHPStan\Type\StaticType;
 use PHPStan\Type\StaticTypeFactory;
@@ -242,7 +245,13 @@ class TypeSpecifier
 						$argType = $scope->getType($exprNode->getArgs()[0]->value);
 						if ($argType->isString()->yes()) {
 							$funcTypes = $this->create($exprNode, $constantType, $context, false, $scope, $rootExpr);
-							$valueTypes = $this->create($exprNode->getArgs()[0]->value, new AccessoryNonEmptyStringType(), $newContext, false, $scope, $rootExpr);
+
+							$accessory = new AccessoryNonEmptyStringType();
+							if ($constantType->getValue() >= 2) {
+								$accessory = new AccessoryNonFalsyStringType();
+							}
+							$valueTypes = $this->create($exprNode->getArgs()[0]->value, $accessory, $newContext, false, $scope, $rootExpr);
+
 							return $funcTypes->unionWith($valueTypes);
 						}
 					}
@@ -260,6 +269,16 @@ class TypeSpecifier
 					$argType = $scope->getType($exprNode->getArgs()[0]->value);
 
 					if ($argType->isString()->yes()) {
+						if ($constantType->getValue() !== '0') {
+							return $this->create(
+								$exprNode->getArgs()[0]->value,
+								TypeCombinator::intersect($argType, new AccessoryNonFalsyStringType()),
+								$context,
+								false,
+								$scope,
+							);
+						}
+
 						return $this->create(
 							$exprNode->getArgs()[0]->value,
 							TypeCombinator::intersect($argType, new AccessoryNonEmptyStringType()),
@@ -267,6 +286,44 @@ class TypeSpecifier
 							false,
 							$scope,
 						);
+					}
+				}
+
+				if (
+					$exprNode instanceof FuncCall
+					&& $exprNode->name instanceof Name
+					&& strtolower($exprNode->name->toString()) === 'gettype'
+					&& isset($exprNode->getArgs()[0])
+					&& $constantType instanceof ConstantStringType
+				) {
+					$type = null;
+					if ($constantType->getValue() === 'string') {
+						$type = new StringType();
+					}
+					if ($constantType->getValue() === 'array') {
+						$type = new ArrayType(new MixedType(), new MixedType());
+					}
+					if ($constantType->getValue() === 'boolean') {
+						$type = new BooleanType();
+					}
+					if ($constantType->getValue() === 'resource' || $constantType->getValue() === 'resource (closed)') {
+						$type = new ResourceType();
+					}
+					if ($constantType->getValue() === 'integer') {
+						$type = new IntegerType();
+					}
+					if ($constantType->getValue() === 'double') {
+						$type = new FloatType();
+					}
+					if ($constantType->getValue() === 'NULL') {
+						$type = new NullType();
+					}
+					if ($constantType->getValue() === 'object') {
+						$type = new ObjectWithoutClassType();
+					}
+
+					if ($type !== null) {
+						return $this->create($exprNode->getArgs()[0]->value, $type, $context, false, $scope, $rootExpr);
 					}
 				}
 			}
@@ -390,6 +447,34 @@ class TypeSpecifier
 						$rootExpr,
 					);
 				}
+
+				if (
+					$exprNode instanceof FuncCall
+					&& $exprNode->name instanceof Name
+					&& strtolower($exprNode->name->toString()) === 'gettype'
+					&& isset($exprNode->getArgs()[0])
+					&& $constantType instanceof ConstantStringType
+				) {
+					return $this->specifyTypesInCondition($scope, new Expr\BinaryOp\Identical($expr->left, $expr->right), $context, $rootExpr);
+				}
+
+				if (
+					$exprNode instanceof FuncCall
+					&& $exprNode->name instanceof Name
+					&& strtolower($exprNode->name->toString()) === 'get_class'
+					&& isset($exprNode->getArgs()[0])
+					&& $constantType instanceof ConstantStringType
+				) {
+					return $this->specifyTypesInCondition(
+						$scope,
+						new Instanceof_(
+							$exprNode->getArgs()[0]->value,
+							new Name($constantType->getValue()),
+						),
+						$context,
+						$rootExpr,
+					);
+				}
 			}
 
 			$leftType = $scope->getType($expr->left);
@@ -437,47 +522,10 @@ class TypeSpecifier
 				return $this->create($expr->left, new NonEmptyArrayType(), $context->negate(), false, $scope, $rootExpr);
 			}
 
-			if (
-				$expr->left instanceof FuncCall
-				&& $expr->left->name instanceof Name
-				&& strtolower($expr->left->name->toString()) === 'get_class'
-				&& isset($expr->left->getArgs()[0])
-				&& $rightType instanceof ConstantStringType
-			) {
-				return $this->specifyTypesInCondition(
-					$scope,
-					new Instanceof_(
-						$expr->left->getArgs()[0]->value,
-						new Name($rightType->getValue()),
-					),
-					$context,
-					$rootExpr,
-				);
-			}
-
-			if (
-				$expr->right instanceof FuncCall
-				&& $expr->right->name instanceof Name
-				&& strtolower($expr->right->name->toString()) === 'get_class'
-				&& isset($expr->right->getArgs()[0])
-				&& $leftType instanceof ConstantStringType
-			) {
-				return $this->specifyTypesInCondition(
-					$scope,
-					new Instanceof_(
-						$expr->right->getArgs()[0]->value,
-						new Name($leftType->getValue()),
-					),
-					$context,
-					$rootExpr,
-				);
-			}
-
-			$stringType = new StringType();
 			$integerType = new IntegerType();
 			$floatType = new FloatType();
 			if (
-				($stringType->isSuperTypeOf($leftType)->yes() && $stringType->isSuperTypeOf($rightType)->yes())
+				($leftType->isString()->yes() && $rightType->isString()->yes())
 				|| ($integerType->isSuperTypeOf($leftType)->yes() && $integerType->isSuperTypeOf($rightType)->yes())
 				|| ($floatType->isSuperTypeOf($leftType)->yes() && $floatType->isSuperTypeOf($rightType)->yes())
 			) {
@@ -570,7 +618,12 @@ class TypeSpecifier
 				) {
 					$argType = $scope->getType($expr->right->getArgs()[0]->value);
 					if ($argType->isString()->yes()) {
-						$result = $result->unionWith($this->create($expr->right->getArgs()[0]->value, new AccessoryNonEmptyStringType(), $context, false, $scope, $rootExpr));
+						$accessory = new AccessoryNonEmptyStringType();
+						if ($leftType instanceof ConstantIntegerType && $leftType->getValue() >= 2) {
+							$accessory = new AccessoryNonFalsyStringType();
+						}
+
+						$result = $result->unionWith($this->create($expr->right->getArgs()[0]->value, $accessory, $context, false, $scope, $rootExpr));
 					}
 				}
 			}
@@ -1063,30 +1116,35 @@ class TypeSpecifier
 			return null;
 		}
 
+		$targetType = $conditionalType->getTarget();
 		$ifType = $conditionalType->getIf();
 		$elseType = $conditionalType->getElse();
 
 		if ($leftType->isSuperTypeOf($ifType)->yes() && $rightType->isSuperTypeOf($elseType)->yes()) {
-			return $this->create(
-				$argsMap[$parameterName],
-				$conditionalType->getTarget(),
-				$conditionalType->isNegated() ? TypeSpecifierContext::createFalse() : TypeSpecifierContext::createTrue(),
-				false,
-				$scope,
-			);
+			$context = $conditionalType->isNegated() ? TypeSpecifierContext::createFalse() : TypeSpecifierContext::createTrue();
+		} elseif ($leftType->isSuperTypeOf($elseType)->yes() && $rightType->isSuperTypeOf($ifType)->yes()) {
+			$context = $conditionalType->isNegated() ? TypeSpecifierContext::createTrue() : TypeSpecifierContext::createFalse();
+		} else {
+			return null;
 		}
 
-		if ($leftType->isSuperTypeOf($elseType)->yes() && $rightType->isSuperTypeOf($ifType)->yes()) {
-			return $this->create(
-				$argsMap[$parameterName],
-				$conditionalType->getTarget(),
-				$conditionalType->isNegated() ? TypeSpecifierContext::createTrue() : TypeSpecifierContext::createFalse(),
-				false,
-				$scope,
-			);
+		$specifiedTypes = $this->create(
+			$argsMap[$parameterName],
+			$targetType,
+			$context,
+			false,
+			$scope,
+		);
+
+		if ($targetType instanceof ConstantBooleanType) {
+			if (!$targetType->getValue()) {
+				$context = $context->negate();
+			}
+
+			$specifiedTypes = $specifiedTypes->unionWith($this->specifyTypesInCondition($scope, $argsMap[$parameterName], $context));
 		}
 
-		return null;
+		return $specifiedTypes;
 	}
 
 	/**
@@ -1219,6 +1277,17 @@ class TypeSpecifier
 		$originalExpr = $expr;
 		if (isset($resultType) && !TypeCombinator::containsNull($resultType)) {
 			$expr = NullsafeOperatorHelper::getNullsafeShortcircuitedExpr($expr);
+		}
+
+		if (
+			$scope !== null
+			&& !$context->null()
+			&& $expr instanceof Expr\BinaryOp\Coalesce
+		) {
+			$rightIsSuperType = $type->isSuperTypeOf($scope->getType($expr->right));
+			if (($context->true() && $rightIsSuperType->no()) || ($context->false() && $rightIsSuperType->yes())) {
+				$expr = $expr->left;
+			}
 		}
 
 		if (

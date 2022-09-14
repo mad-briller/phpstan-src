@@ -64,6 +64,7 @@ use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Accessory\AccessoryLiteralStringType;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\Accessory\HasOffsetValueType;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\BooleanType;
@@ -115,8 +116,11 @@ use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_pop;
+use function array_slice;
 use function count;
+use function explode;
 use function get_class;
+use function implode;
 use function in_array;
 use function is_string;
 use function ltrim;
@@ -1109,8 +1113,12 @@ class MutatingScope implements Scope
 				}
 
 				$isNonEmpty = false;
+				$isNonFalsy = false;
 				$isLiteralString = true;
 				foreach ($parts as $partType) {
+					if ($partType->isNonFalsyString()->yes()) {
+						$isNonFalsy = true;
+					}
 					if ($partType->isNonEmptyString()->yes()) {
 						$isNonEmpty = true;
 					}
@@ -1121,9 +1129,12 @@ class MutatingScope implements Scope
 				}
 
 				$accessoryTypes = [];
-				if ($isNonEmpty === true) {
+				if ($isNonFalsy === true) {
+					$accessoryTypes[] = new AccessoryNonFalsyStringType();
+				} elseif ($isNonEmpty === true) {
 					$accessoryTypes[] = new AccessoryNonEmptyStringType();
 				}
+
 				if ($isLiteralString === true) {
 					$accessoryTypes[] = new AccessoryLiteralStringType();
 				}
@@ -1466,7 +1477,7 @@ class MutatingScope implements Scope
 					$newTypes[] = $this->getTypeFromValue($varValue);
 				}
 				return TypeCombinator::union(...$newTypes);
-			} elseif ($stringType->isSuperTypeOf($varType)->yes()) {
+			} elseif ($varType->isString()->yes()) {
 				if ($varType->isLiteralString()->yes()) {
 					return new IntersectionType([$stringType, new AccessoryLiteralStringType()]);
 				}
@@ -2478,12 +2489,18 @@ class MutatingScope implements Scope
 
 	public function enterTrait(ClassReflection $traitReflection): self
 	{
+		$namespace = null;
+		$traitName = $traitReflection->getName();
+		$traitNameParts = explode('\\', $traitName);
+		if (count($traitNameParts) > 1) {
+			$namespace = implode('\\', array_slice($traitNameParts, 0, -1));
+		}
 		return $this->scopeFactory->create(
 			$this->context->enterTrait($traitReflection),
 			$this->isDeclareStrictTypes(),
 			$this->constantTypes,
 			$this->getFunction(),
-			$this->getNamespace(),
+			$namespace,
 			$this->getVariableTypes(),
 			$this->moreSpecificTypes,
 			[],
@@ -3135,6 +3152,13 @@ class MutatingScope implements Scope
 		$scope = $this->assignVariable($keyName, $iterateeType->getIterableKeyType());
 		$scope->nativeExpressionTypes[sprintf('$%s', $keyName)] = $nativeIterateeType->getIterableKeyType();
 
+		if ($iterateeType->isArray()->yes()) {
+			$scope = $scope->specifyExpressionType(
+				new Expr\ArrayDimFetch($iteratee, new Variable($keyName)),
+				$iterateeType->getIterableValueType(),
+			);
+		}
+
 		return $scope;
 	}
 
@@ -3413,14 +3437,26 @@ class MutatingScope implements Scope
 				$this->parentScope,
 			);
 		} elseif ($expr instanceof Expr\ArrayDimFetch && $expr->dim !== null) {
-			return $this->specifyExpressionType(
-				$expr->var,
-				$this->getType($expr->var)->unsetOffset($this->getType($expr->dim)),
-			)->invalidateExpression(
+			$exprVarType = $this->getType($expr->var);
+			$dimType = $this->getType($expr->dim);
+			$unsetType = $exprVarType->unsetOffset($dimType);
+			$scope = $this->specifyExpressionType($expr->var, $unsetType)->invalidateExpression(
 				new FuncCall(new FullyQualified('count'), [new Arg($expr->var)]),
 			)->invalidateExpression(
 				new FuncCall(new FullyQualified('sizeof'), [new Arg($expr->var)]),
 			);
+
+			if ($expr->var instanceof Expr\ArrayDimFetch && $expr->var->dim !== null) {
+				$scope = $scope->specifyExpressionType(
+					$expr->var->var,
+					$scope->getType($expr->var->var)->setOffsetValueType(
+						$scope->getType($expr->var->dim),
+						$scope->getType($expr->var),
+					),
+				);
+			}
+
+			return $scope;
 		}
 
 		return $this;
@@ -3496,6 +3532,37 @@ class MutatingScope implements Scope
 				$conditionalExpressions[$conditionalExprString] = $holders;
 			}
 
+			$moreSpecificTypeHolders = $this->moreSpecificTypes;
+			foreach ($moreSpecificTypeHolders as $specifiedExprString => $specificTypeHolder) {
+				if (!$specificTypeHolder->getCertainty()->yes()) {
+					continue;
+				}
+
+				$specifiedExprString = (string) $specifiedExprString;
+				$specifiedExpr = $this->exprStringToExpr($specifiedExprString);
+				if ($specifiedExpr === null) {
+					continue;
+				}
+				if (!$specifiedExpr instanceof Expr\ArrayDimFetch) {
+					continue;
+				}
+
+				if (!$specifiedExpr->dim instanceof Variable) {
+					continue;
+				}
+
+				if (!is_string($specifiedExpr->dim->name)) {
+					continue;
+				}
+
+				if ($specifiedExpr->dim->name !== $variableName) {
+					continue;
+				}
+
+				$moreSpecificTypeHolders[$specifiedExprString] = VariableTypeHolder::createYes($this->getType($specifiedExpr->var)->getOffsetValueType($type));
+				unset($nativeTypes[$specifiedExprString]);
+			}
+
 			return $this->scopeFactory->create(
 				$this->context,
 				$this->isDeclareStrictTypes(),
@@ -3503,7 +3570,7 @@ class MutatingScope implements Scope
 				$this->getFunction(),
 				$this->getNamespace(),
 				$variableTypes,
-				$this->moreSpecificTypes,
+				$moreSpecificTypeHolders,
 				$conditionalExpressions,
 				$this->inClosureBindScopeClass,
 				$this->anonymousFunctionReflection,
@@ -3519,10 +3586,11 @@ class MutatingScope implements Scope
 			$dimType = ArrayType::castToArrayKeyType($this->getType($expr->dim));
 			if ($dimType instanceof ConstantIntegerType || $dimType instanceof ConstantStringType) {
 				$exprVarType = $this->getType($expr->var);
-				if (!$exprVarType instanceof MixedType) {
+				if (!$exprVarType instanceof MixedType && !$exprVarType->isArray()->no()) {
 					$types = [
 						new ArrayType(new MixedType(), new MixedType()),
 						new ObjectType(ArrayAccess::class),
+						new NullType(),
 					];
 					if ($dimType instanceof ConstantIntegerType) {
 						$types[] = new StringType();
@@ -3577,17 +3645,10 @@ class MutatingScope implements Scope
 		$nodeFinder = new NodeFinder();
 		foreach (array_keys($moreSpecificTypeHolders) as $exprString) {
 			$exprString = (string) $exprString;
-
-			try {
-				$expr = $this->parser->parseString('<?php ' . $exprString . ';')[0];
-			} catch (ParserErrorsException) {
+			$exprExpr = $this->exprStringToExpr($exprString);
+			if ($exprExpr === null) {
 				continue;
 			}
-			if (!$expr instanceof Node\Stmt\Expression) {
-				throw new ShouldNotHappenException();
-			}
-
-			$exprExpr = $expr->expr;
 			if ($exprExpr instanceof PropertyFetch) {
 				$propertyReflection = $this->propertyReflectionFinder->findPropertyReflectionFromNode($exprExpr, $this);
 				if ($propertyReflection !== null) {
@@ -3643,7 +3704,21 @@ class MutatingScope implements Scope
 		);
 	}
 
-	public function invalidateMethodsOnExpression(Expr $expressionToInvalidate): self
+	private function exprStringToExpr(string $exprString): ?Expr
+	{
+		try {
+			$expr = $this->parser->parseString('<?php ' . $exprString . ';')[0];
+		} catch (ParserErrorsException) {
+			return null;
+		}
+		if (!$expr instanceof Node\Stmt\Expression) {
+			throw new ShouldNotHappenException();
+		}
+
+		return $expr->expr;
+	}
+
+	private function invalidateMethodsOnExpression(Expr $expressionToInvalidate): self
 	{
 		$exprStringToInvalidate = $this->getNodeKey($expressionToInvalidate);
 		$moreSpecificTypeHolders = $this->moreSpecificTypes;
@@ -4584,6 +4659,7 @@ class MutatingScope implements Scope
 								$constantArraysA->getOffsetValueType($keyType),
 								$constantArraysB->getOffsetValueType($keyType),
 							),
+							!$constantArraysA->hasOffsetValueType($keyType)->and($constantArraysB->hasOffsetValueType($keyType))->negate()->no(),
 						);
 					}
 

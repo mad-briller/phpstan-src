@@ -22,6 +22,7 @@ use PHPStan\Reflection\ReflectionProvider\ReflectionProviderProvider;
 use PHPStan\ShouldNotHappenException;
 use PHPStan\Type\Accessory\AccessoryLiteralStringType;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\Accessory\NonEmptyArrayType;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\BenevolentUnionType;
@@ -45,6 +46,7 @@ use PHPStan\Type\IntegerRangeType;
 use PHPStan\Type\IntegerType;
 use PHPStan\Type\IntersectionType;
 use PHPStan\Type\MixedType;
+use PHPStan\Type\NeverType;
 use PHPStan\Type\NullType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\ObjectWithoutClassType;
@@ -117,11 +119,11 @@ class InitializerExprTypeResolver
 		}
 		if ($expr instanceof File) {
 			$file = $context->getFile();
-			return $file !== null ? new ConstantStringType($file) : new StringType();
+			return $file !== null ? (new ConstantStringType($file))->generalize(GeneralizePrecision::moreSpecific()) : new StringType();
 		}
 		if ($expr instanceof Dir) {
 			$file = $context->getFile();
-			return $file !== null ? new ConstantStringType(dirname($file)) : new StringType();
+			return $file !== null ? (new ConstantStringType(dirname($file)))->generalize(GeneralizePrecision::moreSpecific()) : new StringType();
 		}
 		if ($expr instanceof Line) {
 			return new ConstantIntegerType($expr->getLine());
@@ -404,7 +406,11 @@ class InitializerExprTypeResolver
 		}
 
 		$accessoryTypes = [];
-		if ($leftStringType->isNonEmptyString()->or($rightStringType->isNonEmptyString())->yes()) {
+		if ($leftStringType->isNonEmptyString()->and($rightStringType->isNonEmptyString())->yes()) {
+			$accessoryTypes[] = new AccessoryNonFalsyStringType();
+		} elseif ($leftStringType->isNonFalsyString()->or($rightStringType->isNonFalsyString())->yes()) {
+			$accessoryTypes[] = new AccessoryNonFalsyStringType();
+		} elseif ($leftStringType->isNonEmptyString()->or($rightStringType->isNonEmptyString())->yes()) {
 			$accessoryTypes[] = new AccessoryNonEmptyStringType();
 		}
 
@@ -447,19 +453,18 @@ class InitializerExprTypeResolver
 
 					foreach ($valueType->getValueTypes() as $i => $innerValueType) {
 						if ($hasStringKey && $this->phpVersion->supportsArrayUnpackingWithStringKeys()) {
-							$arrayBuilder->setOffsetValueType($valueType->getKeyTypes()[$i], $innerValueType);
+							$arrayBuilder->setOffsetValueType($valueType->getKeyTypes()[$i], $innerValueType, $valueType->isOptionalKey($i));
 						} else {
-							$arrayBuilder->setOffsetValueType(null, $innerValueType);
+							$arrayBuilder->setOffsetValueType(null, $innerValueType, $valueType->isOptionalKey($i));
 						}
 					}
 				} else {
 					$arrayBuilder->degradeToGeneralArray();
 
-					if (! (new StringType())->isSuperTypeOf($valueType->getIterableKeyType())->no() && $this->phpVersion->supportsArrayUnpackingWithStringKeys()) {
-						$arrayBuilder->setOffsetValueType($valueType->getIterableKeyType(), $valueType->getIterableValueType());
-					} else {
-						$arrayBuilder->setOffsetValueType(new IntegerType(), $valueType->getIterableValueType(), !$valueType->isIterableAtLeastOnce()->yes() && !$valueType->getIterableValueType()->isIterableAtLeastOnce()->yes());
-					}
+					$offsetType = $this->phpVersion->supportsArrayUnpackingWithStringKeys() && !$valueType->getIterableKeyType()->isString()->no()
+						? $valueType->getIterableKeyType()
+						: new IntegerType();
+					$arrayBuilder->setOffsetValueType($offsetType, $valueType->getIterableValueType(), !$valueType->isIterableAtLeastOnce()->yes());
 				}
 			} else {
 				$arrayBuilder->setOffsetValueType(
@@ -478,6 +483,10 @@ class InitializerExprTypeResolver
 	{
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
+
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
 
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
@@ -513,14 +522,22 @@ class InitializerExprTypeResolver
 			return TypeCombinator::union(...$resultTypes);
 		}
 
-		$stringType = new StringType();
-
-		if ($stringType->isSuperTypeOf($leftType)->yes() && $stringType->isSuperTypeOf($rightType)->yes()) {
-			return $stringType;
+		if ($leftType->isString()->yes() && $rightType->isString()->yes()) {
+			return new StringType();
 		}
 
-		if (TypeCombinator::union($leftType->toNumber(), $rightType->toNumber()) instanceof ErrorType) {
+		$leftNumberType = $leftType->toNumber();
+		$rightNumberType = $rightType->toNumber();
+
+		if ($leftNumberType instanceof ErrorType || $rightNumberType instanceof ErrorType) {
 			return new ErrorType();
+		}
+
+		if ($rightNumberType instanceof ConstantIntegerType && $rightNumberType->getValue() >= 0) {
+			return IntegerRangeType::fromInterval(0, $rightNumberType->getValue());
+		}
+		if ($leftNumberType instanceof ConstantIntegerType && $leftNumberType->getValue() >= 0) {
+			return IntegerRangeType::fromInterval(0, $leftNumberType->getValue());
 		}
 
 		return new IntegerType();
@@ -533,6 +550,10 @@ class InitializerExprTypeResolver
 	{
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
+
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
 
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
@@ -568,10 +589,8 @@ class InitializerExprTypeResolver
 			return TypeCombinator::union(...$resultTypes);
 		}
 
-		$stringType = new StringType();
-
-		if ($stringType->isSuperTypeOf($leftType)->yes() && $stringType->isSuperTypeOf($rightType)->yes()) {
-			return $stringType;
+		if ($leftType->isString()->yes() && $rightType->isString()->yes()) {
+			return new StringType();
 		}
 
 		if (TypeCombinator::union($leftType->toNumber(), $rightType->toNumber()) instanceof ErrorType) {
@@ -588,6 +607,10 @@ class InitializerExprTypeResolver
 	{
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
+
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
 
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
@@ -623,10 +646,8 @@ class InitializerExprTypeResolver
 			return TypeCombinator::union(...$resultTypes);
 		}
 
-		$stringType = new StringType();
-
-		if ($stringType->isSuperTypeOf($leftType)->yes() && $stringType->isSuperTypeOf($rightType)->yes()) {
-			return $stringType;
+		if ($leftType->isString()->yes() && $rightType->isString()->yes()) {
+			return new StringType();
 		}
 
 		if (TypeCombinator::union($leftType->toNumber(), $rightType->toNumber()) instanceof ErrorType) {
@@ -641,8 +662,16 @@ class InitializerExprTypeResolver
 	 */
 	public function getSpaceshipType(Expr $left, Expr $right, callable $getTypeCallback): Type
 	{
-		$leftTypes = TypeUtils::getConstantScalars($getTypeCallback($left));
-		$rightTypes = TypeUtils::getConstantScalars($getTypeCallback($right));
+		$callbackLeftType = $getTypeCallback($left);
+		$callbackRightType = $getTypeCallback($right);
+
+		if ($callbackLeftType instanceof NeverType || $callbackRightType instanceof NeverType) {
+			return new NeverType();
+		}
+
+		$leftTypes = TypeUtils::getConstantScalars($callbackLeftType);
+		$rightTypes = TypeUtils::getConstantScalars($callbackRightType);
+
 		$leftTypesCount = count($leftTypes);
 		$rightTypesCount = count($rightTypes);
 		if ($leftTypesCount > 0 && $rightTypesCount > 0) {
@@ -728,6 +757,10 @@ class InitializerExprTypeResolver
 	{
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
+
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
 
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
@@ -826,6 +859,10 @@ class InitializerExprTypeResolver
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
 
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
+
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
 		$leftTypesCount = count($leftTypes);
@@ -888,9 +925,9 @@ class InitializerExprTypeResolver
 			return TypeCombinator::union(...$resultTypes);
 		}
 
-		$arrayType = new ArrayType(new MixedType(), new MixedType());
-
-		if ($arrayType->isSuperTypeOf($leftType)->yes() && $arrayType->isSuperTypeOf($rightType)->yes()) {
+		$leftIsArray = $leftType->isArray();
+		$rightIsArray = $rightType->isArray();
+		if ($leftIsArray->yes() && $rightIsArray->yes()) {
 			if ($leftType->getIterableKeyType()->equals($rightType->getIterableKeyType())) {
 				// to preserve BenevolentUnionType
 				$keyType = $leftType->getIterableKeyType();
@@ -922,6 +959,39 @@ class InitializerExprTypeResolver
 				new IntegerType(),
 				new ArrayType(new MixedType(), new MixedType()),
 			]);
+		}
+
+		if (
+			($leftIsArray->yes() && $rightIsArray->no())
+			|| ($leftIsArray->no() && $rightIsArray->yes())
+		) {
+			return new ErrorType();
+		}
+
+		if (
+			($leftIsArray->yes() && $rightIsArray->maybe())
+			|| ($leftIsArray->maybe() && $rightIsArray->yes())
+		) {
+			$resultType = new ArrayType(new MixedType(), new MixedType());
+			if ($leftType->isIterableAtLeastOnce()->yes() || $rightType->isIterableAtLeastOnce()->yes()) {
+				return TypeCombinator::intersect($resultType, new NonEmptyArrayType());
+			}
+
+			return $resultType;
+		}
+
+		if ($leftIsArray->maybe() && $rightIsArray->maybe()) {
+			$plusable = new UnionType([
+				new StringType(),
+				new FloatType(),
+				new IntegerType(),
+				new ArrayType(new MixedType(), new MixedType()),
+				new BooleanType(),
+			]);
+
+			if ($plusable->isSuperTypeOf($leftType)->yes() && $plusable->isSuperTypeOf($rightType)->yes()) {
+				return TypeCombinator::union($leftType, $rightType);
+			}
 		}
 
 		return $this->resolveCommonMath(new BinaryOp\Plus($left, $right), $leftType, $rightType);
@@ -1077,6 +1147,10 @@ class InitializerExprTypeResolver
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
 
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
+
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
 		$leftTypesCount = count($leftTypes);
@@ -1129,6 +1203,10 @@ class InitializerExprTypeResolver
 	{
 		$leftType = $getTypeCallback($left);
 		$rightType = $getTypeCallback($right);
+
+		if ($leftType instanceof NeverType || $rightType instanceof NeverType) {
+			return new NeverType();
+		}
 
 		$leftTypes = TypeUtils::getConstantScalars($leftType);
 		$rightTypes = TypeUtils::getConstantScalars($rightType);
@@ -1195,15 +1273,23 @@ class InitializerExprTypeResolver
 
 	public function resolveEqualType(Type $leftType, Type $rightType): BooleanType
 	{
-		$stringType = new StringType();
 		$integerType = new IntegerType();
 		$floatType = new FloatType();
 		if (
-			($stringType->isSuperTypeOf($leftType)->yes() && $stringType->isSuperTypeOf($rightType)->yes())
+			($leftType->isString()->yes() && $rightType->isString()->yes())
 			|| ($integerType->isSuperTypeOf($leftType)->yes() && $integerType->isSuperTypeOf($rightType)->yes())
 			|| ($floatType->isSuperTypeOf($leftType)->yes() && $floatType->isSuperTypeOf($rightType)->yes())
 		) {
 			return $this->resolveIdenticalType($leftType, $rightType);
+		}
+
+		if ($leftType instanceof ConstantArrayType && $leftType->isEmpty() && $rightType instanceof ConstantScalarType) {
+			// @phpstan-ignore-next-line
+			return new ConstantBooleanType($rightType->getValue() == []); // phpcs:ignore
+		}
+		if ($rightType instanceof ConstantArrayType && $rightType->isEmpty() && $leftType instanceof ConstantScalarType) {
+			// @phpstan-ignore-next-line
+			return new ConstantBooleanType($leftType->getValue() == []); // phpcs:ignore
 		}
 
 		if ($leftType instanceof ConstantScalarType && $rightType instanceof ConstantScalarType) {
@@ -1356,6 +1442,9 @@ class InitializerExprTypeResolver
 		$rightNumberType = $rightType->toNumber();
 		if ($leftNumberType instanceof ErrorType || $rightNumberType instanceof ErrorType) {
 			return new ErrorType();
+		}
+		if ($leftNumberType instanceof NeverType || $rightNumberType instanceof NeverType) {
+			return new NeverType();
 		}
 
 		if (
@@ -1611,6 +1700,8 @@ class InitializerExprTypeResolver
 			if (strtolower($constantName) === 'class') {
 				return new ConstantStringType($constantClassType->getClassName(), true);
 			}
+		} elseif ($class instanceof String_ && strtolower($constantName) === 'class') {
+			return new ConstantStringType($class->value, true);
 		} else {
 			$constantClassType = $getTypeCallback($class);
 			$isObject = true;
@@ -1635,6 +1726,10 @@ class InitializerExprTypeResolver
 					if ($type instanceof TemplateType && !$type instanceof TypeWithClassName) {
 						return new GenericClassStringType($type);
 					} elseif ($type instanceof TypeWithClassName) {
+						$reflection = $type->getClassReflection();
+						if ($reflection !== null && $reflection->isFinalByKeyword()) {
+							return new ConstantStringType($reflection->getName(), true);
+						}
 						return new GenericClassStringType($type);
 					} elseif ((new ObjectWithoutClassType())->isSuperTypeOf($type)->yes()) {
 						return new ClassStringType();

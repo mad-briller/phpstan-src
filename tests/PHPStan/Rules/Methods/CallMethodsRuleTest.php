@@ -26,12 +26,14 @@ class CallMethodsRuleTest extends RuleTestCase
 
 	private bool $checkExplicitMixed = false;
 
+	private bool $checkImplicitMixed = false;
+
 	private int $phpVersion = PHP_VERSION_ID;
 
 	protected function getRule(): Rule
 	{
 		$reflectionProvider = $this->createReflectionProvider();
-		$ruleLevelHelper = new RuleLevelHelper($reflectionProvider, $this->checkNullables, $this->checkThisOnly, $this->checkUnionTypes, $this->checkExplicitMixed);
+		$ruleLevelHelper = new RuleLevelHelper($reflectionProvider, $this->checkNullables, $this->checkThisOnly, $this->checkUnionTypes, $this->checkExplicitMixed, $this->checkImplicitMixed);
 		return new CallMethodsRule(
 			new MethodCallCheck($reflectionProvider, $ruleLevelHelper, true, true),
 			new FunctionCallParametersCheck($ruleLevelHelper, new NullsafeCheck(), new PhpVersion($this->phpVersion), new UnresolvableTypeHelper(), new PropertyReflectionFinder(), true, true, true, true, true),
@@ -505,6 +507,30 @@ class CallMethodsRuleTest extends RuleTestCase
 				'Parameter #1 $code of method Test\\ValueOfParam::foo() expects \'John F. Kennedy…\'|\'La Guardia Airport\', \'Newark Liberty…\' given.',
 				1802,
 			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, numeric-string given.',
+				1844,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, \'0\' given.',
+				1845,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, string given.',
+				1846,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, non-empty-string given.',
+				1847,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, literal-string given.',
+				1848,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, int given.',
+				1849,
+			],
 		]);
 	}
 
@@ -799,6 +825,30 @@ class CallMethodsRuleTest extends RuleTestCase
 			[
 				'Parameter #1 $code of method Test\\ValueOfParam::foo() expects \'John F. Kennedy…\'|\'La Guardia Airport\', \'Newark Liberty…\' given.',
 				1802,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, numeric-string given.',
+				1844,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, \'0\' given.',
+				1845,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, string given.',
+				1846,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, non-empty-string given.',
+				1847,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, literal-string given.',
+				1848,
+			],
+			[
+				'Parameter #1 $string of method Test\NonFalsyString::acceptsNonFalsyString() expects non-falsy-string, int given.',
+				1849,
 			],
 		]);
 	}
@@ -1502,6 +1552,50 @@ class CallMethodsRuleTest extends RuleTestCase
 		$this->checkUnionTypes = true;
 		$this->checkExplicitMixed = $checkExplicitMixed;
 		$this->analyse([__DIR__ . '/data/check-explicit-mixed.php'], $errors);
+	}
+
+	public function dataImplicitMixed(): array
+	{
+		return [
+			[
+				true,
+				[
+					[
+						'Cannot call method foo() on mixed.',
+						16,
+					],
+					[
+						'Parameter #1 $i of method CheckImplicitMixedMethodCall\Bar::doBar() expects int, mixed given.',
+						42,
+					],
+					[
+						'Parameter #1 $i of method CheckImplicitMixedMethodCall\Bar::doBar() expects int, T given.',
+						65,
+					],
+					[
+						'Parameter #1 $cb of method CheckImplicitMixedMethodCall\CallableMixed::doBar2() expects callable(): int, Closure(): mixed given.',
+						139,
+					],
+				],
+			],
+			[
+				false,
+				[],
+			],
+		];
+	}
+
+	/**
+	 * @dataProvider dataImplicitMixed
+	 * @param mixed[] $errors
+	 */
+	public function testImplicitMixed(bool $checkImplicitMixed, array $errors): void
+	{
+		$this->checkThisOnly = false;
+		$this->checkNullables = true;
+		$this->checkUnionTypes = true;
+		$this->checkImplicitMixed = $checkImplicitMixed;
+		$this->analyse([__DIR__ . '/data/check-implicit-mixed.php'], $errors);
 	}
 
 	public function testBug3409(): void
@@ -2496,6 +2590,33 @@ class CallMethodsRuleTest extends RuleTestCase
 		$this->checkUnionTypes = true;
 		$this->checkExplicitMixed = true;
 		$this->analyse([__DIR__ . '/data/bug-1517.php'], []);
+	}
+
+	public function testBug7593(): void
+	{
+		$this->checkThisOnly = false;
+		$this->checkNullables = true;
+		$this->checkUnionTypes = true;
+		$this->checkExplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-7593.php'], []);
+	}
+
+	public function testBug6946(): void
+	{
+		$this->checkThisOnly = false;
+		$this->checkNullables = true;
+		$this->checkUnionTypes = true;
+		$this->checkExplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-6946.php'], []);
+	}
+
+	public function testBug5754(): void
+	{
+		$this->checkThisOnly = false;
+		$this->checkNullables = true;
+		$this->checkUnionTypes = true;
+		$this->checkExplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-5754.php'], []);
 	}
 
 }

@@ -72,6 +72,7 @@ use PHPStan\Node\ClassStatementsGatherer;
 use PHPStan\Node\ClosureReturnStatementsNode;
 use PHPStan\Node\DoWhileLoopConditionNode;
 use PHPStan\Node\ExecutionEndNode;
+use PHPStan\Node\Expr\GetIterableKeyTypeExpr;
 use PHPStan\Node\Expr\GetIterableValueTypeExpr;
 use PHPStan\Node\Expr\GetOffsetValueTypeExpr;
 use PHPStan\Node\Expr\OriginalPropertyTypeExpr;
@@ -107,6 +108,7 @@ use PHPStan\Reflection\FunctionReflection;
 use PHPStan\Reflection\InitializerExprTypeResolver;
 use PHPStan\Reflection\MethodReflection;
 use PHPStan\Reflection\Native\NativeMethodReflection;
+use PHPStan\Reflection\Native\NativeParameterReflection;
 use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\Reflection\Php\PhpMethodReflection;
@@ -1659,11 +1661,9 @@ class NodeScopeResolver
 			return $expr;
 		}
 
-		if ($expr instanceof Expr\CallLike || $expr instanceof Expr\Match_) {
-			$exprType = $scope->getType($expr);
-			if ($exprType instanceof NeverType && $exprType->isExplicit()) {
-				return $expr;
-			}
+		$exprType = $scope->getType($expr);
+		if ($exprType instanceof NeverType && $exprType->isExplicit()) {
+			return $expr;
 		}
 
 		return null;
@@ -2959,7 +2959,31 @@ class NodeScopeResolver
 
 		$byRefUses = [];
 
-		if ($passedToType !== null && !$passedToType->isCallable()->no()) {
+		$callableParameters = null;
+		$closureCallArgs = $expr->getAttribute('closureCallArgs');
+
+		if ($closureCallArgs !== null) {
+			$acceptors = $scope->getType($expr)->getCallableParametersAcceptors($scope);
+			if (count($acceptors) === 1) {
+				$callableParameters = $acceptors[0]->getParameters();
+
+				foreach ($callableParameters as $index => $callableParameter) {
+					if (!isset($closureCallArgs[$index])) {
+						continue;
+					}
+
+					$type = $scope->getType($closureCallArgs[$index]->value);
+					$callableParameters[$index] = new NativeParameterReflection(
+						$callableParameter->getName(),
+						$callableParameter->isOptional(),
+						$type,
+						$callableParameter->passedByReference(),
+						$callableParameter->isVariadic(),
+						$callableParameter->getDefaultValue(),
+					);
+				}
+			}
+		} elseif ($passedToType !== null && !$passedToType->isCallable()->no()) {
 			if ($passedToType instanceof UnionType) {
 				$passedToType = TypeCombinator::union(...array_filter(
 					$passedToType->getTypes(),
@@ -2967,13 +2991,10 @@ class NodeScopeResolver
 				));
 			}
 
-			$callableParameters = null;
 			$acceptors = $passedToType->getCallableParametersAcceptors($scope);
 			if (count($acceptors) === 1) {
 				$callableParameters = $acceptors[0]->getParameters();
 			}
-		} else {
-			$callableParameters = null;
 		}
 
 		$useScope = $scope;
@@ -3100,7 +3121,31 @@ class NodeScopeResolver
 			$nodeCallback($expr->returnType, $scope);
 		}
 
-		if ($passedToType !== null && !$passedToType->isCallable()->no()) {
+		$callableParameters = null;
+		$arrowFunctionCallArgs = $expr->getAttribute('arrowFunctionCallArgs');
+
+		if ($arrowFunctionCallArgs !== null) {
+			$acceptors = $scope->getType($expr)->getCallableParametersAcceptors($scope);
+			if (count($acceptors) === 1) {
+				$callableParameters = $acceptors[0]->getParameters();
+
+				foreach ($callableParameters as $index => $callableParameter) {
+					if (!isset($arrowFunctionCallArgs[$index])) {
+						continue;
+					}
+
+					$type = $scope->getType($arrowFunctionCallArgs[$index]->value);
+					$callableParameters[$index] = new NativeParameterReflection(
+						$callableParameter->getName(),
+						$callableParameter->isOptional(),
+						$type,
+						$callableParameter->passedByReference(),
+						$callableParameter->isVariadic(),
+						$callableParameter->getDefaultValue(),
+					);
+				}
+			}
+		} elseif ($passedToType !== null && !$passedToType->isCallable()->no()) {
 			if ($passedToType instanceof UnionType) {
 				$passedToType = TypeCombinator::union(...array_filter(
 					$passedToType->getTypes(),
@@ -3108,13 +3153,10 @@ class NodeScopeResolver
 				));
 			}
 
-			$callableParameters = null;
 			$acceptors = $passedToType->getCallableParametersAcceptors($scope);
 			if (count($acceptors) === 1) {
 				$callableParameters = $acceptors[0]->getParameters();
 			}
-		} else {
-			$callableParameters = null;
 		}
 
 		$arrowFunctionScope = $scope->enterArrowFunction($expr, $callableParameters);
@@ -3373,6 +3415,17 @@ class NodeScopeResolver
 			foreach (array_reverse($offsetTypes) as $i => $offsetType) {
 				/** @var Type $offsetValueType */
 				$offsetValueType = array_pop($offsetValueTypeStack);
+				if (!$offsetValueType instanceof MixedType) {
+					$types = [
+						new ArrayType(new MixedType(), new MixedType()),
+						new ObjectType(ArrayAccess::class),
+						new NullType(),
+					];
+					if ($offsetType !== null && (new IntegerType())->isSuperTypeOf($offsetType)->yes()) {
+						$types[] = new StringType();
+					}
+					$offsetValueType = TypeCombinator::intersect($offsetValueType, TypeCombinator::union(...$types));
+				}
 				$valueToWrite = $offsetValueType->setOffsetValueType($offsetType, $valueToWrite, $i === 0);
 			}
 
@@ -3728,12 +3781,12 @@ class NodeScopeResolver
 			$scope = $this->processVarAnnotation($scope, [$stmt->expr->name], $stmt);
 		}
 		$iterateeType = $scope->getType($stmt->expr);
-		if ($stmt->valueVar instanceof Variable && is_string($stmt->valueVar->name)) {
+		if (
+			($stmt->valueVar instanceof Variable && is_string($stmt->valueVar->name))
+			&& ($stmt->keyVar === null || ($stmt->keyVar instanceof Variable && is_string($stmt->keyVar->name)))
+		) {
 			$keyVarName = null;
-			if ($stmt->keyVar !== null
-				&& $stmt->keyVar instanceof Variable
-				&& is_string($stmt->keyVar->name)
-			) {
+			if ($stmt->keyVar instanceof Variable && is_string($stmt->keyVar->name)) {
 				$keyVarName = $stmt->keyVar->name;
 			}
 			$scope = $scope->enterForeach(
@@ -3762,6 +3815,18 @@ class NodeScopeResolver
 			) {
 				$scope = $scope->enterForeachKey($stmt->expr, $stmt->keyVar->name);
 				$vars[] = $stmt->keyVar->name;
+			} elseif ($stmt->keyVar !== null) {
+				$scope = $this->processAssignVar(
+					$scope,
+					$stmt->keyVar,
+					new GetIterableKeyTypeExpr($stmt->expr),
+					static function (): void {
+					},
+					ExpressionContext::createDeep(),
+					static fn (MutatingScope $scope): ExpressionResult => new ExpressionResult($scope, false, []),
+					true,
+				)->getScope();
+				$vars = array_merge($vars, $this->getAssignedVariables($stmt->keyVar));
 			}
 		}
 

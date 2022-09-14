@@ -150,6 +150,11 @@ class StringType implements Type
 		return TrinaryLogic::createMaybe();
 	}
 
+	public function isNonFalsyString(): TrinaryLogic
+	{
+		return TrinaryLogic::createMaybe();
+	}
+
 	public function isLiteralString(): TrinaryLogic
 	{
 		return TrinaryLogic::createMaybe();
@@ -160,6 +165,7 @@ class StringType implements Type
 		if ($typeToRemove instanceof ConstantStringType && $typeToRemove->getValue() === '') {
 			return TypeCombinator::intersect($this, new AccessoryNonEmptyStringType());
 		}
+
 		if ($typeToRemove instanceof AccessoryNonEmptyStringType) {
 			return new ConstantStringType('');
 		}

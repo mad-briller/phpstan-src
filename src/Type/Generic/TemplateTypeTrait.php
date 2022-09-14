@@ -95,17 +95,13 @@ trait TemplateTypeTrait
 	public function subtract(Type $typeToRemove): Type
 	{
 		$removedBound = TypeCombinator::remove($this->getBound(), $typeToRemove);
-		$type = TemplateTypeFactory::create(
+		return TemplateTypeFactory::create(
 			$this->getScope(),
 			$this->getName(),
 			$removedBound,
 			$this->getVariance(),
+			$this->getStrategy(),
 		);
-		if ($this->isArgument()) {
-			return TemplateTypeHelper::toArgument($type);
-		}
-
-		return $type;
 	}
 
 	public function getTypeWithoutSubtractedType(): Type
@@ -115,17 +111,13 @@ trait TemplateTypeTrait
 			return $this;
 		}
 
-		$type = TemplateTypeFactory::create(
+		return TemplateTypeFactory::create(
 			$this->getScope(),
 			$this->getName(),
 			$bound->getTypeWithoutSubtractedType(),
 			$this->getVariance(),
+			$this->getStrategy(),
 		);
-		if ($this->isArgument()) {
-			return TemplateTypeHelper::toArgument($type);
-		}
-
-		return $type;
 	}
 
 	public function changeSubtractedType(?Type $subtractedType): Type
@@ -135,17 +127,13 @@ trait TemplateTypeTrait
 			return $this;
 		}
 
-		$type = TemplateTypeFactory::create(
+		return TemplateTypeFactory::create(
 			$this->getScope(),
 			$this->getName(),
 			$bound->changeSubtractedType($subtractedType),
 			$this->getVariance(),
+			$this->getStrategy(),
 		);
-		if ($this->isArgument()) {
-			return TemplateTypeHelper::toArgument($type);
-		}
-
-		return $type;
 	}
 
 	public function getSubtractedType(): ?Type
@@ -249,8 +237,14 @@ trait TemplateTypeTrait
 		$map = $this->getBound()->inferTemplateTypes($receivedType);
 		$resolvedBound = TypeUtils::resolveLateResolvableTypes(TemplateTypeHelper::resolveTemplateTypes($this->getBound(), $map));
 		if ($resolvedBound->isSuperTypeOf($receivedType)->yes()) {
+			if ($this->shouldGeneralizeInferredType()) {
+				$generalizedType = $receivedType->generalize(GeneralizePrecision::templateArgument());
+				if ($resolvedBound->isSuperTypeOf($generalizedType)->yes()) {
+					$receivedType = $generalizedType;
+				}
+			}
 			return (new TemplateTypeMap([
-				$this->name => $this->shouldGeneralizeInferredType() ? $receivedType->generalize(GeneralizePrecision::templateArgument()) : $receivedType,
+				$this->name => $receivedType,
 			]))->union($map);
 		}
 
@@ -267,9 +261,30 @@ trait TemplateTypeTrait
 		return $this->variance;
 	}
 
+	public function getStrategy(): TemplateTypeStrategy
+	{
+		return $this->strategy;
+	}
+
 	protected function shouldGeneralizeInferredType(): bool
 	{
 		return true;
+	}
+
+	public function traverse(callable $cb): Type
+	{
+		$bound = $cb($this->getBound());
+		if ($this->getBound() === $bound) {
+			return $this;
+		}
+
+		return TemplateTypeFactory::create(
+			$this->getScope(),
+			$this->getName(),
+			$bound,
+			$this->getVariance(),
+			$this->getStrategy(),
+		);
 	}
 
 	public function tryRemove(Type $typeToRemove): ?Type

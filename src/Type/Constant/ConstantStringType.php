@@ -15,6 +15,7 @@ use PHPStan\ShouldNotHappenException;
 use PHPStan\TrinaryLogic;
 use PHPStan\Type\Accessory\AccessoryLiteralStringType;
 use PHPStan\Type\Accessory\AccessoryNonEmptyStringType;
+use PHPStan\Type\Accessory\AccessoryNonFalsyStringType;
 use PHPStan\Type\ClassStringType;
 use PHPStan\Type\CompoundType;
 use PHPStan\Type\ConstantScalarType;
@@ -33,11 +34,11 @@ use PHPStan\Type\Traits\ConstantScalarTypeTrait;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
 use PHPStan\Type\VerbosityLevel;
+use function addcslashes;
 use function is_float;
 use function is_numeric;
 use function strlen;
 use function substr;
-use function var_export;
 
 /** @api */
 class ConstantStringType extends StringType implements ConstantScalarType
@@ -77,23 +78,29 @@ class ConstantStringType extends StringType implements ConstantScalarType
 		return $level->handle(
 			static fn (): string => 'string',
 			function (): string {
-				if ($this->isClassString) {
-					return var_export($this->value, true);
+				$value = $this->value;
+
+				if (!$this->isClassString) {
+					try {
+						$value = Strings::truncate($value, self::DESCRIBE_LIMIT);
+					} catch (RegexpException) {
+						$value = substr($value, 0, self::DESCRIBE_LIMIT) . "\u{2026}";
+					}
 				}
 
-				try {
-					$truncatedValue = Strings::truncate($this->value, self::DESCRIBE_LIMIT);
-				} catch (RegexpException) {
-					$truncatedValue = substr($this->value, 0, self::DESCRIBE_LIMIT) . "\u{2026}";
-				}
-
-				return var_export(
-					$truncatedValue,
-					true,
-				);
+				return self::export($value);
 			},
-			fn (): string => var_export($this->value, true),
+			fn (): string => self::export($this->value),
 		);
+	}
+
+	private function export(string $value): string
+	{
+		if (Strings::match($value, '([\000-\037])') !== null) {
+			return '"' . addcslashes($value, "\0..\37\\\"") . '"';
+		}
+
+		return "'" . addcslashes($value, '\\\'') . "'";
 	}
 
 	public function isSuperTypeOf(Type $type): TrinaryLogic
@@ -258,6 +265,11 @@ class ConstantStringType extends StringType implements ConstantScalarType
 		return TrinaryLogic::createFromBoolean($this->getValue() !== '');
 	}
 
+	public function isNonFalsyString(): TrinaryLogic
+	{
+		return TrinaryLogic::createFromBoolean($this->getValue() !== '' && $this->getValue() !== '0');
+	}
+
 	public function isLiteralString(): TrinaryLogic
 	{
 		return TrinaryLogic::createYes();
@@ -330,6 +342,14 @@ class ConstantStringType extends StringType implements ConstantScalarType
 		}
 
 		if ($this->getValue() !== '' && $precision->isMoreSpecific()) {
+			if ($this->getValue() !== '0') {
+				return new IntersectionType([
+					new StringType(),
+					new AccessoryNonFalsyStringType(),
+					new AccessoryLiteralStringType(),
+				]);
+			}
+
 			return new IntersectionType([
 				new StringType(),
 				new AccessoryNonEmptyStringType(),

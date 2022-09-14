@@ -19,7 +19,7 @@ class InvalidBinaryOperationRuleTest extends RuleTestCase
 	{
 		return new InvalidBinaryOperationRule(
 			new ExprPrinter(new Printer()),
-			new RuleLevelHelper($this->createReflectionProvider(), true, false, true, false),
+			new RuleLevelHelper($this->createReflectionProvider(), true, false, true, false, false),
 		);
 	}
 
@@ -241,6 +241,10 @@ class InvalidBinaryOperationRuleTest extends RuleTestCase
 			[
 				'Binary operation "/" between 10 and literal-string results in an error.',
 				222,
+			],
+			[
+				'Binary operation "+" between int and array{} results in an error.',
+				259,
 			],
 		]);
 	}

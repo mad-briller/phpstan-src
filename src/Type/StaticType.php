@@ -20,9 +20,6 @@ use PHPStan\Type\Generic\TemplateTypeHelper;
 use PHPStan\Type\Traits\NonGeneralizableTypeTrait;
 use PHPStan\Type\Traits\NonGenericTypeTrait;
 use PHPStan\Type\Traits\UndecidedComparisonTypeTrait;
-use function array_keys;
-use function array_values;
-use function count;
 use function get_class;
 use function sprintf;
 
@@ -122,6 +119,13 @@ class StaticType implements TypeWithClassName, SubtractableType
 
 	public function isSuperTypeOf(Type $type): TrinaryLogic
 	{
+		if ($type instanceof ObjectType) {
+			$classReflection = $type->getClassReflection();
+			if ($classReflection !== null && $classReflection->isFinal()) {
+				$type = new StaticType($classReflection, $type->getSubtractedType());
+			}
+		}
+
 		if ($type instanceof self) {
 			return $this->getStaticObjectType()->isSuperTypeOf($type);
 		}
@@ -131,13 +135,7 @@ class StaticType implements TypeWithClassName, SubtractableType
 		}
 
 		if ($type instanceof ObjectType) {
-			$result = $this->getStaticObjectType()->isSuperTypeOf($type);
-			$classReflection = $type->getClassReflection();
-			if ($result->yes() && $classReflection !== null && $classReflection->isFinal()) {
-				return $result;
-			}
-
-			return TrinaryLogic::createMaybe()->and($result);
+			return $this->getStaticObjectType()->isSuperTypeOf($type)->and(TrinaryLogic::createMaybe());
 		}
 
 		if ($type instanceof CompoundType) {
@@ -349,6 +347,11 @@ class StaticType implements TypeWithClassName, SubtractableType
 		return $this->getStaticObjectType()->isNonEmptyString();
 	}
 
+	public function isNonFalsyString(): TrinaryLogic
+	{
+		return $this->getStaticObjectType()->isNonFalsyString();
+	}
+
 	public function isLiteralString(): TrinaryLogic
 	{
 		return $this->getStaticObjectType()->isLiteralString();
@@ -427,35 +430,24 @@ class StaticType implements TypeWithClassName, SubtractableType
 
 	public function changeSubtractedType(?Type $subtractedType): Type
 	{
-		$classReflection = $this->getClassReflection();
-		if ($classReflection->isEnum() && $subtractedType !== null) {
-			$cases = [];
-			foreach (array_keys($classReflection->getEnumCases()) as $constantName) {
-				$cases[$constantName] = new EnumCaseObjectType($classReflection->getName(), $constantName);
-			}
-
-			foreach (TypeUtils::flattenTypes($subtractedType) as $subType) {
-				if (!$subType instanceof EnumCaseObjectType) {
-					return new self($this->classReflection, $subtractedType);
+		if ($subtractedType !== null) {
+			$classReflection = $this->getClassReflection();
+			if ($classReflection->isEnum()) {
+				$objectType = $this->getStaticObjectType()->changeSubtractedType($subtractedType);
+				if ($objectType instanceof NeverType) {
+					return $objectType;
 				}
 
-				if ($subType->getClassName() !== $this->getClassName()) {
-					return new self($this->classReflection, $subtractedType);
+				if ($objectType instanceof EnumCaseObjectType) {
+					return TypeCombinator::intersect($this, $objectType);
 				}
 
-				unset($cases[$subType->getEnumCaseName()]);
-			}
+				if ($objectType instanceof ObjectType) {
+					return new self($classReflection, $objectType->getSubtractedType());
+				}
 
-			$cases = array_values($cases);
-			if (count($cases) === 0) {
-				return new NeverType();
+				return $this;
 			}
-
-			if (count($cases) === 1) {
-				return TypeCombinator::intersect($this, $cases[0]);
-			}
-
-			return TypeCombinator::intersect($this, new UnionType(array_values($cases)));
 		}
 
 		return new self($this->classReflection, $subtractedType);

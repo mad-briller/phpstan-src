@@ -9,7 +9,6 @@ use PHPStan\Reflection\ParametersAcceptorSelector;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\DynamicFunctionReturnTypeExtension;
 use PHPStan\Type\IntegerType;
-use PHPStan\Type\MixedType;
 use PHPStan\Type\StringType;
 use PHPStan\Type\Type;
 
@@ -33,8 +32,8 @@ class MbConvertEncodingFunctionReturnTypeExtension implements DynamicFunctionRet
 		}
 
 		$argType = $scope->getType($functionCall->getArgs()[0]->value);
-		$isString = (new StringType())->isSuperTypeOf($argType);
-		$isArray = (new ArrayType(new MixedType(), new MixedType()))->isSuperTypeOf($argType);
+		$isString = $argType->isString();
+		$isArray = $argType->isArray();
 		$compare = $isString->compareTo($isArray);
 		if ($compare === $isString) {
 			return new StringType();

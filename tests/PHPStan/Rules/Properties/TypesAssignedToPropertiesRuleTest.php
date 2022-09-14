@@ -17,7 +17,7 @@ class TypesAssignedToPropertiesRuleTest extends RuleTestCase
 
 	protected function getRule(): Rule
 	{
-		return new TypesAssignedToPropertiesRule(new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed), new PropertyDescriptor(), new PropertyReflectionFinder());
+		return new TypesAssignedToPropertiesRule(new RuleLevelHelper($this->createReflectionProvider(), true, false, true, $this->checkExplicitMixed, false), new PropertyDescriptor(), new PropertyReflectionFinder());
 	}
 
 	public function testTypesAssignedToProperties(): void
@@ -328,7 +328,7 @@ class TypesAssignedToPropertiesRuleTest extends RuleTestCase
 				19,
 			],
 			[
-				'Property Bug6286\HelloWorld::$nestedDetails (array<array{name: string, age: int}>) does not accept non-empty-array<array{name: string, age: \'Eleventy-one\'|int}>.',
+				"Property Bug6286\HelloWorld::\$nestedDetails (array<array{name: string, age: int}>) does not accept non-empty-array<array{name: 'Bilbo Baggins', age: 'Eleventy-one'}|array{name: string, age: int}>.",
 				22,
 			],
 		]);

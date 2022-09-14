@@ -26,7 +26,7 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 		$broker = $this->createReflectionProvider();
 		return new CallToFunctionParametersRule(
 			$broker,
-			new FunctionCallParametersCheck(new RuleLevelHelper($broker, true, false, true, $this->checkExplicitMixed), new NullsafeCheck(), new PhpVersion(80000), new UnresolvableTypeHelper(), new PropertyReflectionFinder(), true, true, true, true, true),
+			new FunctionCallParametersCheck(new RuleLevelHelper($broker, true, false, true, $this->checkExplicitMixed, false), new NullsafeCheck(), new PhpVersion(80000), new UnresolvableTypeHelper(), new PropertyReflectionFinder(), true, true, true, true, true),
 		);
 	}
 
@@ -626,7 +626,7 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 				6,
 			],
 			[
-				'Parameter #3 $data_comp_func of function array_udiff expects callable(int, int): int<-1, 1>, Closure(int, int): non-empty-string given.',
+				'Parameter #3 $data_comp_func of function array_udiff expects callable(int, int): int<-1, 1>, Closure(int, int): non-falsy-string given.',
 				14,
 			],
 			[
@@ -1155,6 +1155,12 @@ class CallToFunctionParametersRuleTest extends RuleTestCase
 	{
 		$this->checkExplicitMixed = true;
 		$this->analyse([__DIR__ . '/data/bug-7156.php'], []);
+	}
+
+	public function testBug7973(): void
+	{
+		$this->checkExplicitMixed = true;
+		$this->analyse([__DIR__ . '/data/bug-7973.php'], []);
 	}
 
 }
