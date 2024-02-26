@@ -12,6 +12,8 @@ use PHPStan\Rules\Generics\GenericObjectTypeCheck;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\ShouldNotHappenException;
+use PHPStan\Type\CallableType;
+use PHPStan\Type\ClosureType;
 use PHPStan\Type\FileTypeMapper;
 use PHPStan\Type\Generic\TemplateType;
 use PHPStan\Type\Type;
@@ -31,6 +33,7 @@ class IncompatiblePhpDocTypeRule implements Rule
 		private FileTypeMapper $fileTypeMapper,
 		private GenericObjectTypeCheck $genericObjectTypeCheck,
 		private UnresolvableTypeHelper $unresolvableTypeHelper,
+		private GenericCallableRuleHelper $genericCallableRuleHelper,
 	)
 	{
 	}
@@ -137,6 +140,20 @@ class IncompatiblePhpDocTypeRule implements Rule
 						),
 					));
 
+					if ($phpDocParamType instanceof CallableType || $phpDocParamType instanceof ClosureType) {
+						$classReflection = $scope->isInClass() ? $scope->getClassReflection() : null;
+						$errors = array_merge($errors, $this->genericCallableRuleHelper->check(
+							$node,
+							$scope,
+							sprintf('%s for parameter $%s', $escapedTagName, $escapedParameterName),
+							$phpDocParamType,
+							$functionName,
+							$resolvedPhpDoc->getTemplateTags(),
+							$classReflection,
+							$classReflection !== null ? $classReflection->getTemplateTags() : [],
+						));
+					}
+
 					if ($phpDocParamTag instanceof ParamOutTag) {
 						if (!$byRefParameters[$parameterName]) {
 							$errors[] = RuleErrorBuilder::message(sprintf(
@@ -214,6 +231,20 @@ class IncompatiblePhpDocTypeRule implements Rule
 					}
 
 					$errors[] = $errorBuilder->build();
+				}
+
+				if ($phpDocReturnType instanceof CallableType || $phpDocReturnType instanceof ClosureType) {
+					$classReflection = $scope->isInClass() ? $scope->getClassReflection() : null;
+					$errors = array_merge($errors, $this->genericCallableRuleHelper->check(
+						$node,
+						$scope,
+						'@return',
+						$phpDocReturnType,
+						$functionName,
+						$resolvedPhpDoc->getTemplateTags(),
+						$classReflection,
+						$classReflection !== null ? $classReflection->getTemplateTags() : [],
+					));
 				}
 			}
 		}
