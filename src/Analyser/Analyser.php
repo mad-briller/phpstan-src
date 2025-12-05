@@ -15,6 +15,7 @@ use function array_merge;
 use function count;
 use function memory_get_peak_usage;
 
+
 /**
  * @phpstan-import-type CollectorData from CollectedData
  */
